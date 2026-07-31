@@ -36,3 +36,8 @@ CLAUDE.local.md
 /launch-content
 /.feature-analysis-projects
 /to-explore.md
+
+# Credentials — never commit (root-level, not just template/)
+.env
+.env.*
+!.env.*.example
