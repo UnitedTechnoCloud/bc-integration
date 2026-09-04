@@ -10,10 +10,10 @@
 
 ### CLI Tools
 
-Specialized bash tools handle different aspects of the development lifecycle. All tools require `curl` and `jq`, and source credentials directly from `.env` — no Python dependencies or virtual environments needed.
+Specialized bash tools handle different aspects of the development lifecycle. All tools require `curl` and `jq`, and source credentials directly from `.env` — no Python dependencies or virtual environments needed. Run `boomi-env-check.sh` to see which required tools are installed.
 
 **Environment & Setup**:
-- **boomi-env-check.sh**: Check which `.env` variables are set without revealing values
+- **boomi-env-check.sh**: Check which `.env` variables are set without revealing values, and which required CLI tools are installed
 - **boomi-folder-create.sh**: Create new folders for project organization. Falls back to account root if `BOOMI_TARGET_FOLDER` is invalid or missing — do not attempt to manually search or resolve parent folders if absent. If the fallback WARN fires, tell the user their configured target folder was not used and confirm the correct folder ID.
 - **boomi-shared-server-info.sh**: Fetch atom `apiType`, default-port `url`, default-port `auth` (when reportable), and atom-wide `minAuth` floor from `SharedServerInformation`. Run before authoring any WSS listener or API Service Component to route by API tier (`basic`/`intermediate` → bare WSS; `advanced` → API Service Component). Takes an atom ID as arg; defaults to `$BOOMI_TEST_ATOM_ID`. Exits non-zero on lookup failure. Output is supplementary — see `references/platform_entities/shared_web_server.md` for what the API can and can't tell you about a multi-port atom.
 
@@ -23,14 +23,15 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 - **boomi-component-pull.sh**: Download components from platform to local
 - **boomi-component-diff.sh**: Compare two versions of a component (structured JSON diff)
 - **boomi-version-history.sh**: List component version history
-- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat (no subfolder recursion); `--folder` accepts id, exact name, or LIKE pattern with `%` wildcards (multiple matches unioned). `--related-to` cannot combine with other filters. Implicit filters: `currentVersion=true`, `deleted=false`.
+- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat unless `--recursive`; `--folder` accepts an id, exact name, `%` pattern, or path. `--related-to` cannot combine with other filters. Implicit filters: `currentVersion=true`, `deleted=false` — which scopes results to the account default branch.
+- **boomi-folder-list.sh**: List a folder's child folders (or its whole subtree with `--recursive`) as `id<TAB>fullPath`, also written to `active-development/inventories/folder_list_<timestamp>.json`.
 
 **Deployment & Testing**:
 - **boomi-deploy.sh**: Deploy processes to runtime environments
 - **boomi-undeploy.sh**: Remove deployments by ID or by component file (`--by-component`)
 - **boomi-test-execute.sh**: Trigger process execution via platform API and return execution ID
 - **boomi-wss-test.sh**: Test WSS listener endpoints directly via the shared web server
-- **boomi-execution-query.sh**: Query execution records and download logs for any process type (including WSS listeners, manually executed processes, scheduled processes)
+- **boomi-execution-query.sh**: Query execution records and download logs for any process type (including WSS listeners, manually executed processes, scheduled processes). `--logs` also requires `unzip`, since logs arrive as a zip archive; it exits non-zero with a diagnostic when `unzip` is absent or the log cannot be extracted, rather than reporting an empty log.
 
 **Branch & Merge** (only for accounts with Branch & Merge enabled):
 - **boomi-branch.sh**: Branch lifecycle and merge request operations (subcommand-based)
@@ -91,11 +92,17 @@ bash <skill-path>/scripts/boomi-execution-query.sh --execution-id <execution-id>
 
 **Component Search** (discovery primitive — results land in `active-development/inventories/<timestamp>.json` for later reference):
 ```bash
-# Everything in a specific folder (flat — no subfolder recursion).
-# --folder accepts an id, an exact name, or a LIKE pattern with % wildcards;
-# multiple matches are unioned.
+# Components directly in a folder (flat by default). --folder takes an id, exact
+# name, % pattern, or path; multiple matches are unioned.
 bash <skill-path>/scripts/boomi-component-search.sh --folder "AcmeCorp-EmailNotification"
-bash <skill-path>/scripts/boomi-component-search.sh --folder "AcmeCorp-%"
+
+# The folder AND its subfolders. An organizational parent returns 0 components when
+# searched flat, and a % pattern on its name will not reach its children.
+bash <skill-path>/scripts/boomi-component-search.sh --folder "%Invoicing%" --recursive
+
+# A path disambiguates same-named folders; a '/'-anchored trailing portion is
+# enough, and % works in any segment.
+bash <skill-path>/scripts/boomi-component-search.sh --folder "Billing/Invoic%" --type process
 
 # All connections in an account — the API-level type is connector-settings.
 # To narrow to a specific connector, filter the saved JSON by subType
@@ -113,6 +120,24 @@ bash <skill-path>/scripts/boomi-component-search.sh --type connector-settings,co
 # IMPORTANT: --related-to cannot be combined with other filters.
 bash <skill-path>/scripts/boomi-component-search.sh --related-to <componentId>
 ```
+
+**Folder Discovery** (structure under a parent folder):
+```bash
+# Account's top-level folders
+bash <skill-path>/scripts/boomi-folder-list.sh
+
+# A folder's direct children; add --recursive for the whole subtree
+bash <skill-path>/scripts/boomi-folder-list.sh --folder "%Invoicing%"
+```
+
+Deleted folders are excluded from every folder query. A `--recursive` scope is capped at
+`FOLDER_SCOPE_MAX` folders (default 1000); past it both tools print `TRUNCATED` and set
+`metadata.truncated`.
+
+`boomi-folder-list.sh` omits the named folder from its output; `boomi-component-search.sh
+--recursive` includes it in scope. Component records carry `folderId` and `folderName` but no path,
+so when same-named folders are in scope, attribute records via `metadata.filters.folderScope`
+(id + `fullPath`), not `folderName`.
 
 **`--type` takes the API-level component type, not the Boomi UI label.** A Boomi "connection" is `connector-settings` (with a `subType` naming the connector); an "operation" is `connector-action`. Other common types: `process`, `transform.map`, `profile.xml`, `profile.json`, `profile.db`, `profile.edi`, `profile.flatfile`, `script.processing`, `webservice`, `flowservice`, `queue`.
 
@@ -135,19 +160,22 @@ bash <skill-path>/scripts/boomi-branch.sh merge --source feature-x --dest <targe
 bash <skill-path>/scripts/boomi-branch.sh merge-status --id <mergeRequestId>   # poll until stage=REVIEWING
 bash <skill-path>/scripts/boomi-branch.sh merge-execute --id <mergeRequestId>  # execute the merge
 
-# Deploy warns automatically if component is from a non-main branch
+# Deploy from a branch directly — no merge to main needed
 bash <skill-path>/scripts/boomi-deploy.sh active-development/process/my-process.xml
 ```
 
-**Branch resolution priority for component tools:** `--branch` flag > `branchId` already in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > main.
+**Branch resolution priority for component tools:** `--branch` flag > `branchId` already in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > the *account default branch* (main unless the account sets another). Pass `--branch main` to target main from an account whose default is elsewhere.
 
-**Safety:** Push aborts if sync state records a branch but the XML has no `branchId` (prevents accidental writes to main). Deploy warns when deploying from a non-main branch. All operations echo the target branch.
+**Safety:** Push aborts if sync state records a branch but the XML has no `branchId` — pass `--branch`, or `--account-default` to push unqualified on purpose. Deploy replaces any existing deployment of the process in the target environment, on every branch including main. On `ComponentId is invalid`, pull and push automatically query `ComponentMetadata` and print a `DIAGNOSIS:` line naming the branches that hold the component, because the platform's response is identical to a nonexistent ID.
+
+**Reading the account default branch:** `boomi-branch.sh default` — read-only.
 
 See `references/guides/branch_merge_guide.md` for full Branch & Merge API reference.
 
 **Version Management Workflows**:
 ```bash
-# List all versions of a component
+# List all versions of a component (rows from every branch)
+# Also writes the full result set to active-development/inventories/version_history_<ts>.json
 bash <skill-path>/scripts/boomi-version-history.sh --component-id <guid>
 
 # Pull a specific historical version (saves as MyProcess_v2.xml)
@@ -158,6 +186,10 @@ bash <skill-path>/scripts/boomi-component-diff.sh --component-id <guid> --source
 ```
 
 See `references/guides/version_management_guide.md` for full version management reference.
+
+**Push short-circuit:** `boomi-component-push.sh` compares the local file's hash against the hash recorded in local sync state, not against the platform. If the component changed in the GUI but the local file did not, the push reports `matches the last push — nothing sent to the platform` and sends nothing, so GUI-side drift is invisible to it. Use `--force` to overwrite platform state from the local file. The target branch is part of the comparison, so a push that retargets the branch (`--branch`, `--account-default`) still goes out on byte-identical content.
+
+**Diff blind spot:** `boomi-component-diff.sh` does not report dragpoint `x`/`y` changes — the platform's diff omits cosmetic coordinates. A GUI save that regenerates dragpoint coordinates shows up as a diff of only the label attributes it also changed. To detect that kind of drift, pull both versions and compare the XML directly.
 
 **Large Profile Analysis**:
 ```bash
@@ -266,7 +298,7 @@ When **creating** a component, use the component-type identifier in the XML's `t
 
 ### Configuration System
 **Streamlined Configuration**:
-- All configuration is sourced directly from the `.env` file — no YAML config layer. Tools `source .env` natively in bash.
+- All configuration is sourced directly from the `.env` file — no YAML config layer. Tools read it in-shell at startup.
 
 ### Activity Logging
 
@@ -280,12 +312,14 @@ Opt-in JSONL log of script-level operations (component pulls, pushes, deployment
 
 **User-provided credentials**: If the user provides a credential value directly (e.g., "here's the API key, build this"), use it in component XML. If it appears to be a production secret, remind them of the pull-from-platform option — but respect their choice.
 
-**Pulled components — encryption behavior**:
+**Pulled components — encryption behavior** (REST Client connections are an exception — see below):
 - If any field has `encrypted="true"` or `type="password"` with encrypted value, preserve the value exactly as-is
 - Encrypted hex values may change across pull cycles due to platform-side re-encryption — this is expected, not corruption
 - Some connectors (e.g., MCP Server) use `encrypted="true"` on `<properties>` elements within `customproperties` fields instead of `type="password"` — see the relevant connection component reference
 - Do not attempt to encrypt or re-encrypt values programmatically — this will produce broken credentials
 - Do not copy an encrypted value from one component into a different component — a transplanted ciphertext can push cleanly but fail to decrypt when the process executes (surfacing as an auth failure with no other symptom). To credential a new component, have the user set the value in the GUI on that component, then pull it
+
+**Password fields are write-only**: a pulled `type="password"` value is a platform token, not the password, and writing it back silently breaks the credential — never re-push a pulled connection that has one. `boomi-component-create.sh` and `boomi-component-push.sh` refuse a pushed token for **REST Client components only** (`--allow-password-token` overrides); a custom SDK connector connection carrying the same token pushes unchallenged, so the rule is yours to enforce there. Read `references/guides/boomi_error_reference.md` Issue #39 before writing either.
 
 **Process property passwords**: Prefer leaving `defaultValue` empty for `type="password"` fields and supplying real values via Environment Extensions. If a pulled component has a non-empty password `defaultValue`, let the user know — they may want to migrate to Environment Extensions.
 

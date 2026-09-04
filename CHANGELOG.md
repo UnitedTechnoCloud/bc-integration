@@ -1,5 +1,159 @@
 # Changelog
 
+## 1.0.57
+
+- Document what causes a repeating target element to be created in a map
+- Document flat-file record emission versus repeating XML elements
+- Add error reference issue for a map with no satisfied mapping emitting zero documents
+
+
+## 1.0.56
+
+- Read Process Property components through a Set Properties `definedparameter`, not a GUID in a script body
+
+
+## 1.0.55
+
+- Fail honestly when `boomi-execution-query.sh --logs` cannot retrieve a log, instead of reporting SUCCESS with an empty log
+- Report which required CLI tools are installed in `boomi-env-check.sh`
+
+
+## 1.0.54
+
+- Resolve the workspace `.env` explicitly rather than via `$PATH`
+
+
+## 1.0.53
+
+- Model XML profile attributes with a nested `<XMLAttribute>`, not `<XMLElement isNode="false">`
+
+
+## 1.0.52
+
+- Add Boomi Data Hub connector operation reference
+
+
+## 1.0.51
+
+- Documented the custom SDK connector operation component
+
+
+## 1.0.50
+
+- Suppress credential values in shell trace output (xtrace)
+
+
+## 1.0.49
+
+- Component and deploy operations honor the account default branch when no branch is given
+- Create and push report the branch the platform actually used, and warn on a mismatch
+- New `boomi-branch.sh default` reports the account default branch, read-only
+- `boomi-branch.sh`, `boomi-component-pull.sh`, `boomi-deploy.sh`, and `boomi-version-history.sh` answer `--help` without a workspace `.env`
+- `ComponentId is invalid` now self-diagnoses on pull and push
+- `boomi-version-history.sh` writes the full result set to `active-development/inventories/`
+- New `boomi-component-push.sh --account-default` for an intentional unqualified push
+- Push no longer short-circuits a branch retarget as unchanged content
+- Deploy notes on every deploy that it replaces an existing deployment of the process
+- Document the account default branch, and scope `currentVersion` to the surface it applies to
+
+
+## 1.0.48
+
+- Document when map tagLists are required
+
+
+## 1.0.47
+
+- Fetch developer.boomi.com docs as Markdown via the `/md` path convention, starting from the `llms.txt` indexes
+
+
+## 1.0.46
+
+- Credentials now reach curl on stdin instead of the command line (CWE-214)
+- Credentials are no longer exported into child process environments
+
+
+## 1.0.45
+
+- Documented converging outcomes on the canvas
+- Documented the Notify step's log output, message level and attributes
+
+
+## 1.0.44
+
+- Pin the API User-Agent against install-directory and `.env` overrides
+
+
+## 1.0.43
+
+- Document Split Documents output shape: the split preserves the parent wrapper in JSON and XML
+
+
+## 1.0.42
+
+- Correct Mail Send `bodyContentType`: relevant only under `disposition="attachment"`, inert and optional under `inline`
+- Correct Mail content-type values to lowercase
+
+
+## 1.0.41
+
+- Narrow the Disk V2 cloud runtime directory rule to `work`
+- Add error reference Issue #33 for Disk V2 `FilePermission` denials
+
+
+## 1.0.40
+
+- REST Client connection passwords: set in the GUI; a pulled value is a token, not the password.
+- Component create and push refuse a pulled REST Client secret token (`--allow-password-token` overrides).
+- Documented Environment Extensions for editing a REST Client connection without the plaintext.
+- Added `--help` to `boomi-component-create.sh`.
+
+
+## 1.0.39
+
+- Added `boomi-folder-list.sh` to list a folder's subfolders.
+- `boomi-component-search.sh`: new `--recursive`; `--folder` takes a path.
+- Folder queries exclude deleted folders; oversized subtrees are capped.
+- Fixed an unbound-variable crash in `boomi-component-search.sh`.
+
+
+## 1.0.38
+
+- Added Business Rules step
+
+
+## 1.0.37
+
+- Skill folder now ships the changelog
+
+
+## 1.0.36
+
+- Document Agent step file uploads
+- Correct Agent step error handling, output format, and connection/operation details
+- Add error reference Issue #32 for Agent step in-band errors
+
+
+## 1.0.35
+
+- Note the execution-worker requirement for Event Streams Listen on cloud runtimes, with the Consume fallback
+
+
+## 1.0.34
+
+- Add `components/mail_component.md` — awareness-only reference for the legacy Mail connector (`connectorType="mail"`), routing new work to Mail (IMAP)
+
+
+## 1.0.33
+
+- Expanded and consolidated parameter value type knowledge into a single guide now referenced from Notify, Message, Set Properties, and Exception steps
+
+
+## 1.0.32
+
+- Fix `xml_attr` returning multiple values on XML with nested `componentId` attributes
+
+
 ## 1.0.31
 
 - Corrected flat file profile textQualifier enum values

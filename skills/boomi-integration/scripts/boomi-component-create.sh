@@ -1,8 +1,38 @@
 #!/usr/bin/env bash
 # Create a new component on the Boomi platform from a local XML file
-# Usage: bash scripts/boomi-component-create.sh <file_path> [--branch NAME_OR_ID] [--test-connection]
+# Usage: bash scripts/boomi-component-create.sh <file_path> [--branch NAME_OR_ID] [--allow-password-token] [--test-connection]
 
 source "$(dirname "$0")/boomi-common.sh"
+
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  bash scripts/boomi-component-create.sh <file_path> [--branch NAME_OR_ID] [--allow-password-token]
+  bash scripts/boomi-component-create.sh --test-connection
+
+Creates a new component on the Boomi platform from a local component XML file.
+Exits without writing if the XML already carries a component ID.
+
+Arguments:
+  <file_path>            Path to the component XML file to create.
+
+Options:
+  --branch <name|id>     Target branch (name or id). Defaults to the XML's
+                         branchId, then BOOMI_DEFAULT_BRANCH_ID, then the
+                         account default branch.
+  --allow-password-token Create a REST Client connection whose password field
+                         looks like a pulled secret token (128 lowercase hex).
+  --test-connection      Verify platform credentials and exit.
+  -h, --help             Show this help and exit.
+
+Side effects: creates a component on the platform; writes the returned
+component ID back into the local XML; updates local sync state.
+EOF
+}
+
+# Answer --help before load_env, which needs a workspace .env.
+if wants_help "--branch" "$@"; then usage; exit 0; fi
+
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID
 require_tools curl jq
@@ -11,12 +41,15 @@ require_tools curl jq
 FILE_PATH=""
 TEST_CONN=false
 BRANCH=""
+ALLOW_PASSWORD_TOKEN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --test-connection) TEST_CONN=true; shift ;;
     --branch)          BRANCH="$2"; shift 2 ;;
-    -*)                echo "Unknown option: $1" >&2; exit 1 ;;
+    --allow-password-token) ALLOW_PASSWORD_TOKEN=true; shift ;;
+    -h|--help)         usage; exit 0 ;;
+    -*)                echo "Unknown option: $1" >&2; usage; exit 1 ;;
     *)                 FILE_PATH="$1"; shift ;;
   esac
 done
@@ -27,7 +60,8 @@ if $TEST_CONN; then
 fi
 
 if [[ -z "$FILE_PATH" ]]; then
-  echo "Usage: bash scripts/boomi-component-create.sh <file_path> [--branch NAME_OR_ID]" >&2
+  echo "ERROR: missing <file_path>." >&2
+  usage
   exit 1
 fi
 
@@ -35,6 +69,8 @@ if [[ ! -f "$FILE_PATH" ]]; then
   echo "ERROR: File not found: ${FILE_PATH}" >&2
   exit 1
 fi
+
+assert_no_password_token "$FILE_PATH" "$ALLOW_PASSWORD_TOKEN"
 
 COMPONENT_NAME="$(basename "$FILE_PATH" .xml)"
 
@@ -57,7 +93,7 @@ if [[ -n "$BRANCH_ID" ]]; then
   prepared_xml=$(inject_branch_id "$prepared_xml" "$BRANCH_ID")
   echo "Creating component '${COMPONENT_NAME}' on branch ${BRANCH:-$BRANCH_ID}"
 else
-  echo "Creating component '${COMPONENT_NAME}' on main"
+  echo "Creating component '${COMPONENT_NAME}' on the account default branch"
 fi
 
 # --- Create on platform ---
@@ -73,6 +109,11 @@ boomi_api -X POST "$url" \
   -H "Content-Type: application/xml" \
   --data-binary "@${body_file}"
 
+# Trace off across response handling: a 4xx body can echo back a submitted password.
+_xtrace_enabled=0
+case $- in *x*) _xtrace_enabled=1 ;; esac
+set +x
+
 if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
   log_activity "component-create" "fail" "$RESPONSE_CODE" \
     "$(jq -cn --arg name "$COMPONENT_NAME" --arg file "$FILE_PATH" \
@@ -82,12 +123,16 @@ if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
   exit 1
 fi
 
+report_response_branch "$RESPONSE_BODY" "$BRANCH_ID" "Create landed on"
+
 # --- Extract component ID from response ---
 component_id=$(echo "$RESPONSE_BODY" | xml_attr "componentId")
 if [[ -z "$component_id" ]]; then
   echo "ERROR: No componentId in create response" >&2
   exit 1
 fi
+
+if (( _xtrace_enabled )); then set -x; fi
 
 # --- Update local file with generated ID (when empty, stale, or absent) ---
 set_root_component_id "$component_id" < "$FILE_PATH" > "${FILE_PATH}.tmp" && mv "${FILE_PATH}.tmp" "$FILE_PATH"
@@ -115,6 +160,6 @@ write_sync_state "$component_id" "$FILE_PATH" "$content_hash" "$BRANCH_ID"
 
 log_activity "component-create" "success" "$RESPONSE_CODE" \
   "$(jq -cn --arg name "$COMPONENT_NAME" --arg id "$component_id" \
-     --arg file "$FILE_PATH" --arg branch "${BRANCH_ID:-main}" \
+     --arg file "$FILE_PATH" --arg branch "${BRANCH_ID:-account-default}" \
      '{component_name: $name, component_id: $id, file_path: $file, branch: $branch}')"
 echo "SUCCESS: Component '${COMPONENT_NAME}' created with ID: ${component_id}"
