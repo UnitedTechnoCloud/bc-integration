@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.103
+
+- Genericize Claude-specific references
+
+
 ## 1.0.102
 
 - Warn that CRT values and overrides are plain text; link CRT and extension docs
@@ -832,7 +837,7 @@
 
 ## 0.5.18
 
-- Fix `notify_step.md` and `route_step.md`: correct docs that claimed `valueType="track"` works for DPPs — it only reads DDPs. DPPs require `valueType="process"` with `<processparameter>` (ref: error reference Issue #24, BIG-981)
+- Fix `notify_step.md` and `route_step.md`: correct docs that claimed `valueType="track"` works for DPPs — it only reads DDPs. DPPs require `valueType="process"` with `<processparameter>`
 
 ## 0.5.17
 
