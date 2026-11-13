@@ -18,7 +18,9 @@ Boomi component type string: `type="crossref"` in the `bns:Component` wrapper.
 
 Cross reference tables are static, in-memory lookup tables for value translation between systems. Common uses: code mapping (system A codes to system B codes), status translation, environment-specific parameter values.
 
-Cross reference tables cannot be updated dynamically at runtime.
+**Table edits reach a deployed process only when that process is redeployed** — its package keeps the revision it was deployed with. To change values without a redeploy, override the rows through Environment Extensions; see `process_extensions.md`.
+
+**Never store credentials in a CRT.** Row values and their environment overrides are plain text, with no encryption or masking; keep secrets in connection credential fields.
 
 ## Component Structure
 
@@ -203,7 +205,7 @@ Cross reference lookups can be used anywhere a parameter value is accepted via `
                   propertyId="dynamicdocument.DDP_EMAIL"
                   shouldEncrypt="false">
   <sourcevalues>
-    <parametervalue key="1" usesEncryption="false" valueType="crossref">
+    <parametervalue key="0" usesEncryption="false" valueType="crossref">
       <crossrefparameter crossRefTableId="{CROSSREF_COMPONENT_ID}"
                          outputParamId="3" outputParamName="email">
         <inputs>

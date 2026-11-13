@@ -1,5 +1,268 @@
 # Changelog
 
+## 1.0.103
+
+- Genericize Claude-specific references
+
+
+## 1.0.102
+
+- Warn that CRT values and overrides are plain text; link CRT and extension docs
+
+
+## 1.0.101
+
+- Reconcile MCP single-Return-Documents requirement with converging-outcomes layout rule
+
+
+## 1.0.100
+
+- Document Partner / Sub-Account environment variables
+
+
+## 1.0.99
+
+- Document cross-reference table override clearing in environment extensions
+
+
+## 1.0.98
+
+- Document Cache joins in maps
+
+
+## 1.0.97
+
+- Add XSLT Stylesheet component and Data Process XSLT Transformation step reference
+
+
+## 1.0.96
+
+- Document auto-added child TagLists in the XML and EDI profile references
+
+
+## 1.0.95
+
+- JSON profiles: mark mandatory entries with `required="true"`
+
+
+## 1.0.94
+
+- REST Client: OAuth 2.0 connections are set up by the user in the GUI; never re-push a pulled OAuth connection
+
+
+## 1.0.93
+
+- Document the serialized output shape of a map writing to an XML profile (prolog, indentation, line endings) in `xml_profile_component.md`
+
+
+## 1.0.92
+
+- Add `usage()` and `--help` to the remaining `boomi-integration` CLI scripts that lacked them
+
+
+## 1.0.91
+
+- Add `$` interpolation caution for double-quoted Groovy strings in Data Process reference
+- Replace `readAllBytes()` (Java 9+) with `is.getText("UTF-8")` (all Java versions) in Data Process examples
+
+
+## 1.0.90
+
+- Add SFTP Known Host Entry (host key pinning) guidance
+
+
+## 1.0.89
+
+- Add SFTP connector references: connection, Write/Read/List operations, and connector step
+
+
+## 1.0.88
+
+- Document Windows OS prerequisites
+
+
+## 1.0.87
+
+- Map Script components: document that `useComponent="true"` runs the component's script and ignores the map's embedded script; reference example now uses an empty `<ScriptToExecute/>`
+
+
+## 1.0.86
+
+- Add `boomi-folder-rename.sh` to rename a folder in place; it refuses a name already used by a sibling folder.
+
+
+## 1.0.85
+
+- Document `records` key in component search output; fix output filename
+
+
+## 1.0.84
+
+- `boomi-profile-inspect.py` now supports JSON profiles
+- Warns when a JSON profile hit the platform's 5,000-field GUI import limit
+
+
+## 1.0.83
+
+- Cross reference table edits require a redeploy; override values via Environment Extensions instead.
+- Document process-property-component and cross reference table overrides.
+- Fix the process-property revert payload; warn that a `value` sent with `useDefault: true` is ignored.
+- In an EDI profile, `impliedDecimal` controls the implied-decimal shift, not `dataType`.
+- Document Sum's row count in a repeating target, and that a partially filled repeating row is still emitted.
+- Note there is no AS4 Trading Partner communication method.
+
+
+## 1.0.82
+
+- Add component names and `--branch` to `--related-to`
+- Fix `boomi-component-search.sh` leaving temp files behind
+
+
+## 1.0.81
+
+- Require every outcome on multi-path steps to be wired, with a `continue="true"` Stop as the minimum target
+
+
+## 1.0.80
+
+- Fix duplicate `branchId` attribute on large component pushes/pulls
+
+
+## 1.0.79
+
+- Fix Custom Connector step reference to stop shipping an empty `<parameters/>` example
+
+
+## 1.0.78
+
+- Fix outdated Python references in the SSL-verification section of boomi_error_reference.md
+
+
+## 1.0.77
+
+- Fix Event Streams connection example to use a folder ID placeholder instead of folder name
+
+
+## 1.0.76
+
+- Fix `<Process>` casing in MCP Server snippet
+
+
+## 1.0.75
+
+- Document where EDI profile validation rules are enforced.
+- Declare `xmlns:xsi` in the EDI profile template.
+
+
+## 1.0.74
+
+- Exempt Process Route subprocesses from the redeploy-parent rule
+
+
+## 1.0.73
+
+- Connection test queries component metadata instead of runtimes and reports the account ID
+- Connection test reports the effective sub-account when running against a partner account
+
+
+## 1.0.72
+
+- Add `hl7_profile_component.md` — HL7 v2 EDI profile reference
+- Document the repeating-field composite-expansion data-loss trap
+- Correct `EdiHL7Options` semantics and repeating-segment `tagLists` guidance
+- Move HL7 MSH guidance into the HL7 reference
+
+
+## 1.0.71
+
+- Document all four Split Documents profile types (Flat File, XML, EDI, JSON)
+- EDI profiles bind data elements by profile order, not by the numeric suffix in the element name
+
+
+## 1.0.70
+
+- Add Boomi Managed File Transfer (SDK) connector references: connection, List/Get/Create operations, step; mark Thru-based MFT docs as Legacy
+
+
+## 1.0.69
+
+- Default `stopProcessingIfZeroDocuments="true"` in all process-options snippets; document that an omitted attribute is stored as `true` on create but `false` on update
+
+
+## 1.0.68
+
+- Use explicit placeholder notation for the JDBC URL in the Database v2 connection reference
+
+
+## 1.0.67
+
+- A custom connector QUERY fails without a GUI-configured step filter.
+
+
+## 1.0.66
+
+- Correct Trading Partner Start/Send shape configuration and output-path routing
+- Add X12 inbound failure-class routing
+- Document unwired output paths and invalid dragpoint identifiers as silent data loss
+
+
+## 1.0.65
+
+- Wrap every `EdiSegment` in a root `EdiLoop isContainer="true"` — a bare-root profile is uneditable
+- Regenerating a map's `<Mappings>` is destructive
+- Prefer an explicit `segmentchar` over `newline`
+
+
+## 1.0.64
+
+- Restrict empty `<dragpoints/>` to Stop, Exception, Return Documents, Add to Cache
+- Define `toShape="unset"` as a placeholder, not a connection
+- Add error reference entry for a dangling shape that deploys clean and fails at execution
+
+
+## 1.0.63
+
+- Add custom-curl and auth-error steering to `SKILL.md`
+- Point to the `boomi-marketplace` skill as a resource
+
+
+## 1.0.62
+
+- Require `key` on every Set Properties source value — a keyless one leaves the shape un-editable in the platform UI
+- Note that a GUI save does not repair keyless parameters in untouched shapes
+- Add error reference entry for a Set Properties shape that will not open in the GUI
+
+
+## 1.0.61
+
+- Shape notes: count characters against the ~300 limit before writing
+
+
+## 1.0.60
+
+- Document the String Replace search parameter as a Java regex: capture groups, `$1` in the replacement, in-pattern backreferences, anchors
+- Document XML attribute escaping for a pattern written in an `<Input>` `default`
+- Document non-matching input returned unchanged
+- Document leading and trailing whitespace trimmed on the map's write to a character target element
+- Add the "emit a field only when the source is populated" idiom
+- Document present-but-empty versus absent source on a defaulted function input
+- Add a behavior table for the gate's `Fix to Length` default hazard
+
+
+## 1.0.59
+
+- Add Find Changes (Change Data Capture) step reference
+
+
+## 1.0.58
+
+- Document how to express a conditional in a map without Scripting
+- Document Fix to Length behavior for Left/Right Character Trim
+- Clarify that an empty result suppresses a target field only at the map boundary
+- Note that a suppressed target field does not fail the map
+- Note String Concat has no practical input-port ceiling
+
+
 ## 1.0.57
 
 - Document what causes a repeating target element to be created in a map
@@ -574,7 +837,7 @@
 
 ## 0.5.18
 
-- Fix `notify_step.md` and `route_step.md`: correct docs that claimed `valueType="track"` works for DPPs — it only reads DDPs. DPPs require `valueType="process"` with `<processparameter>` (ref: error reference Issue #24, BIG-981)
+- Fix `notify_step.md` and `route_step.md`: correct docs that claimed `valueType="track"` works for DPPs — it only reads DDPs. DPPs require `valueType="process"` with `<processparameter>`
 
 ## 0.5.17
 

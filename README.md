@@ -1,6 +1,6 @@
 # bc-integration
 
-The official Boomi Companion — a Claude Code plugin for Boomi platform development. It wraps the boomi-integration skill with plugin-level commands, agents, and workspace tooling.
+The official Boomi Companion — an AI agent plugin for Boomi platform development. It wraps the boomi-integration skill with plugin-level commands, agents, and workspace tooling.
 
 > **Important:** Boomi Companion is a publicly available developer offering, not an officially supported Boomi product. It is provided as-is and is not covered by Boomi support agreements or SLAs. Boomi curates and maintains this tool on a best-effort basis — treat it as a self-service resource. Boomi reserves the right to modify or discontinue it at any time without notice.
 
@@ -57,7 +57,3 @@ After running `configure-template-workspace`, use `/freshies` from any empty dir
 **How the agent interacts with `.env`**: The project settings and agent instructions steer the agent away from directly reading your `.env` file. The CLI tools load credentials internally — the agent invokes the tools without seeing the credential values. This is a default convenience buffer, not a hard security boundary. Be aware that:
 
 - The `.env` file is a plaintext file on your machine
-- The default deny rules in the template workspace `.claude/settings.json` guide the agent away from common file-reading paths, but a sufficiently motivated or creatively prompted agent could find indirect ways to access file contents
-
-If you need stricter isolation, consider Claude Code's [sandboxing options](https://docs.anthropic.com/en/docs/claude-code/security) or OS-level file permissions.
-

@@ -41,8 +41,11 @@ Commands:
       (the platform stores empty strings literally). "useDefault": true on a
       DPP entry is also rejected (the platform's error for this is opaque).
       To remove a connection/operation-field override, send {"useDefault": true}
-      on the field (no "value" key). To remove a DPP override, send the
-      property entry with no "value" key (e.g. {"name":"DPP_X"}).
+      on the field (no "value" key); for a process-property-component value,
+      send {"key":"...","useDefault": true}. To remove a DPP override, send the
+      property entry with no "value" key (e.g. {"name":"DPP_X"}). To remove a
+      cross-reference table override, send {"overrideValues": false} on the
+      entry (CrossReferenceRows is not required when clearing).
 
   -h, --help, help
       Print this message.
@@ -144,7 +147,7 @@ cmd_set() {
     echo "ERROR: payload contains \"value\": \"\" — refusing to send." >&2
     echo "Empty strings are stored literally by the platform and will break the next execution." >&2
     echo "To remove an override:" >&2
-    echo "  - On a connection or operation field, set \"useDefault\": true on the field (omit \"value\")." >&2
+    echo "  - On a connection or operation field, or a process-property-component value, set \"useDefault\": true (omit \"value\")." >&2
     echo "  - On a DPP, send the property entry with no \"value\" key (e.g. {\"name\":\"DPP_X\"})." >&2
     exit 1
   fi
@@ -152,7 +155,18 @@ cmd_set() {
   if echo "$body" | jq -e '.properties.property[]? | select(has("useDefault"))' >/dev/null 2>&1; then
     echo "ERROR: payload sets \"useDefault\" on a DPP entry — the platform rejects this." >&2
     echo "To remove a DPP override, send the property entry with no \"value\" key (e.g. {\"name\":\"DPP_X\"})." >&2
-    echo "\"useDefault\" is a connection/operation-field attribute only." >&2
+    echo "\"useDefault\" applies to connection/operation fields and process-property-component values, not DPPs." >&2
+    exit 1
+  fi
+
+  if echo "$body" | jq -e '
+    .crossReferences.crossReference[]?
+    | select(.overrideValues == true)
+    | select((.CrossReferenceRows.row // []) | length == 0)
+  ' >/dev/null 2>&1; then
+    echo "ERROR: payload sets \"overrideValues\": true on a cross-reference entry without rows." >&2
+    echo "This activates an empty override table — all lookups will silently return no value." >&2
+    echo "Include CrossReferenceRows with overrideValues: true, or set overrideValues: false to clear." >&2
     exit 1
   fi
 

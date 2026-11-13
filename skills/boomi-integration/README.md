@@ -12,7 +12,7 @@ For a full overview of Boomi Companion, including concepts, usage guidance, and 
 
 ## Related Plugins & Skills
 
-This skill is also part of [Boomi Companion](https://github.com/OfficialBoomi/boomi-companion), which includes the following Claude Code plugins:
+This skill is also part of [Boomi Companion](https://github.com/OfficialBoomi/boomi-companion), which includes the following AI agent plugins:
 
 | Plugin | Description |
 |--------|-------------|
@@ -41,21 +41,11 @@ This is a distributable skill that provides AI coding agents with knowledge and 
 ## Prerequisites
 
 - `curl` (universally available)
-- `jq` (install via `brew install jq` on macOS or `apt install jq` on Linux)
+- `jq` (install via `brew install jq` on macOS, `apt install jq` on Linux, or `winget install jqlang.jq` on Windows)
 - Python 3 (only for `boomi-profile-inspect.py` — stdlib only, no pip deps)
+- Windows: the scripts require a bash shell — use Git Bash or WSL (not `cmd.exe` or PowerShell)
 
 ## Installation
-
-### Claude Code (via the bc-integration plugin)
-
-Install through the Claude Code plugin system — the skill is included automatically:
-
-1. Add the Boomi marketplace: `/plugin marketplace add OfficialBoomi/boomi-companion`
-2. Install the plugin: `/plugin install bc-integration@boomi-companion`
-
-Alternatively, navigate the `/plugin` menu interactively within Claude Code to add the marketplace and install.
-
-### Manual configuration
 
 Clone or copy this skill directory into the location your platform uses for agent skills. Consult your platform's documentation for the correct skill directory path.
 
@@ -104,6 +94,11 @@ SERVER_USERNAME=your_runtime_username
 SERVER_TOKEN=your_runtime_token
 SERVER_BEARER_TOKEN=
 SERVER_VERIFY_SSL=false
+
+# Partner / Sub-Account (optional — uncomment if managing a sub-account)
+# BOOMI_ACCOUNT_ID above must be the parent partner account; API token must come from it.
+# PARTNER_OVERRIDE=true
+# PARTNER_SUB_ACCOUNT=sub_account_id
 ```
 
 **Where to find these:**
@@ -150,6 +145,7 @@ The skill makes the following CLI tools available to the agent:
 
 - `boomi-env-check.sh` - Checks which .env variables are set without revealing values, and which required CLI tools are installed
 - `boomi-folder-create.sh` - Creates project folders
+- `boomi-folder-rename.sh` - Renames folders
 - `boomi-component-create.sh` - Creates new components
 - `boomi-component-push.sh` - Updates existing components
 - `boomi-component-pull.sh` - Downloads components from platform
@@ -185,13 +181,7 @@ The skill includes the following Boomi-centric reference documentation:
 
 ## Support and Issues
 
-This skill is designed originally for Claude Code, but Agent Skills are an open standard accessible to other models and platforms. 
-
-More info about agent skills can be found here: https://agentskills.io/home
-and here: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
-
 If you encounter issues:
 
-1. This course provides an excellent intro to Claude Code: https://anthropic.skilljar.com/claude-code-in-action
+1. Your AI agent can often help troubleshoot and explain issues
 2. We would love your feedback and input via developer-offerings@boomi.com
-3. Your AI agent can often help troubleshoot and explain issues

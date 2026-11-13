@@ -151,7 +151,7 @@ Standard-specific partner settings. The child element depends on the `standard` 
 | `envelopeoption` | enum | - | `groupall`, `groupfg`, `groupst` | Outbound envelope grouping |
 | `fileDelimiter` | string | - | `stardelimited`, etc. | Element delimiter |
 | `fileDelimiterSpecial` | string | - | - | Custom delimiter character |
-| `segmentchar` | string | - | `newline`, `tilde`, etc. | Segment terminator |
+| `segmentchar` | string | - | `tilde`, `carriagereturn`, etc. | Segment terminator — prefer an explicit byte over `newline`, see `edi_profile_component.md` § EdiSegmentChar Enum |
 | `segmentcharSpecial` | string | - | - | Custom segment terminator |
 | `allowduplicates` | boolean | - | - | Allow duplicate documents |
 | `rejectDuplicateInterchange` | boolean | false | - | Reject duplicate ISA control numbers |
@@ -399,6 +399,8 @@ Communication configuration varies by method. The structure wraps a `Communicati
 | `disk` | Local/network filesystem | Directory-based exchange |
 | `mllp` | Minimum Lower Layer Protocol | Healthcare (HL7) |
 | `oftp` | ODETTE File Transfer Protocol 2 | European automotive |
+
+There is no AS4, ebMS, or Peppol method.
 
 ### EdiCommunicationOptionType (`commOption`)
 

@@ -61,7 +61,7 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | Disk V2 write denied on a path outside `work` | #33 (Disk V2 Directory Outside work/) |
 | Profile-keyed extraction empty after a Split Documents step | #34 (Split Preserves Wrapper) |
 | Every document lands on a Route step's Default path after a split | #34 (Split Preserves Wrapper) |
-| "No data produced from map" after a split | #34 (Split Preserves Wrapper) |
+| "No data produced from map" after a split, keyed against a flattened profile | #34 (Split Preserves Wrapper) |
 | "ComponentId is invalid" on a component that exists | #35 (Account Default Branch) |
 | Push reports a new version but main never changes | #35 (Account Default Branch) |
 | GUI warning: "The 'X' action is no longer available" | #36 (Unresolvable customOperationType) |
@@ -75,6 +75,25 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | Process Property value unreachable from Groovy after a clean push and deploy | #40 (Script GUID Creates No Dependency Edge) |
 | "No data produced from map" with no other listed cause matching | #41 (No Satisfied Mapping) |
 | Map step emits zero documents and every downstream step is skipped | #41 (No Satisfied Mapping) |
+| Set Properties shape will not open in the GUI / double-clicking does nothing | #42 (Missing parametervalue key) |
+| Set Properties dialog silently fails to open, process runs correctly | #42 (Missing parametervalue key) |
+| Agent-authored process executes correctly but its Set Properties shapes cannot be edited | #42 (Missing parametervalue key) |
+| `IndexOutOfBoundsException: Index 0 out of bounds for length 0` at execution | #43 (Unwired output path) |
+| `First document failure: Index 0 out of bounds for length 0` on a map step | #43 (Unwired output path) |
+| Last shape in a process errors before doing any of its own work | #43 (Unwired output path) |
+| Branch reports success but no branch actually ran | #43 (Unwired output path) |
+| Execution COMPLETE but documents on one path never reached a downstream shape | #43 (Unwired output path) |
+| `Try/Catch Shape sending N document(s) down error path` warning with no catch-path activity after it | #43 (Unwired output path) |
+| EDI profile shows an empty tree / "Getting Started" state in the Data Elements tab | #44 (EDI Segments Outside a Root Container) |
+| Map source pane blank, no mapping lines, target pane fine | #44 (EDI Segments Outside a Root Container) |
+| "No data produced from map" on an EDI profile with tagLists | #45 (Unresolvable tagLists elementKey) |
+| `The Link Element was not selected for a Split Documents By Profile processing step.` | #46 (Flat File Split Misconfiguration) |
+| A flat file Split Documents step fails at execution after a GUI mode switch | #46 (Flat File Split Misconfiguration) |
+| Rows silently missing from the documents a flat file split produced | #46 (Flat File Split Misconfiguration) |
+| "No data produced from map" on a flat file profile downstream of a split | #46 (Flat File Split Misconfiguration) |
+| `Error attempting to load map definitions from map '<name>'` … `Caused by: java.lang.NullPointerException` at process initialization | #47 (Dangling fromCacheJoinKey) |
+| A Document Cache join outputs more records than the source had, each repeated with different cached values | #48 (Join srcParentKey Above the Record) |
+| Records whose key matches no cached document still carry cache data | #48 (Join srcParentKey Above the Record) |
 
 ---
 
@@ -123,6 +142,13 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | 39 | Pushing a Pulled Connection Destroys the Password | High | Silent - fails only as remote auth rejection |
 | 40 | Script GUID Creates No Dependency Edge | High | Runtime error - push and deploy both clean |
 | 41 | A Map With No Satisfied Mapping Emits Zero Documents | High | Explicit ERROR at the map step - zero documents, downstream skipped |
+| 42 | Missing `key` on a Set Properties `<parametervalue>` | High | GUI only - push, deploy and execution all succeed |
+| 43 | Unwired Output Path on a Shape That Emits Documents | High | Runtime error - push and deploy both clean; silent on a multi-path shape |
+| 44 | EDI Segments Outside a Root Container Make the Profile Uneditable | High | GUI only - push, deploy and execution all succeed |
+| 45 | Unresolvable `tagLists` `elementKey` Destroys Every Document | Medium | Runtime ERROR - zero documents, error blames the source data |
+| 46 | Flat File Split Documents Misconfiguration | High | Runtime error on a missing link element - silent row loss on headers |
+| 47 | Dangling `fromCacheJoinKey` Fails the Execution With a Bare NPE | Low | Runtime ERROR at initialization - push and deploy both clean, no step runs |
+| 48 | Join `srcParentKey` Above the Record Cross-Pairs Every Record | Medium | Silent - wrong output, COMPLETE with no warning |
 
 ---
 
@@ -279,6 +305,8 @@ Before pushing ANY component with credentials:
 ### The Problem
 
 Parent processes snapshot subprocess versions at deployment time. Updating/deploying a subprocess does NOT automatically update parent processes that reference it.
+
+Does not apply to Process Route subprocesses — see `references/steps/process_route_step.md`.
 
 **Real-World Symptoms:**
 - HTTP endpoints return old responses despite subprocess changes
@@ -824,7 +852,7 @@ Before deploying WSS wrapper + subprocess to production:
 
 ### The Problem
 
-Development and testing environments often use self-signed SSL certificates. Python CLI tools and curl commands fail with SSL certificate verification errors when connecting to these environments, despite credentials being correct.
+Development and testing environments often use self-signed SSL certificates. The skill's curl-based CLI tools and manual curl commands fail with SSL certificate verification errors when connecting to these environments, despite credentials being correct.
 
 **Common Scenarios:**
 - Local/custom Boomi instances with self-signed certificates
@@ -833,7 +861,7 @@ Development and testing environments often use self-signed SSL certificates. Pyt
 
 ### Why It Happens
 
-By default, both Python's `requests` library and `curl` refuse to connect to HTTPS endpoints with untrusted or self-signed certificates for security reasons.
+By default, `curl` refuses to connect to HTTPS endpoints with untrusted or self-signed certificates for security reasons.
 
 ### Wrong Pattern - Hard-Coded Insecure Flags
 
@@ -853,15 +881,14 @@ BOOMI_VERIFY_SSL=false        # Platform API SSL verification
 SERVER_VERIFY_SSL=false       # Runtime server SSL verification
 ```
 
-**Python Tools:** All CLI tools automatically respect `BOOMI_VERIFY_SSL` setting:
-```python
-# Handled automatically by tools
-verify_ssl_config = self.config.get('api', {}).get('verify_ssl', 'true')
-self.verify_ssl = str(verify_ssl_config).lower() != 'false'
-response = requests.get(url, verify=self.verify_ssl)
+**Platform API Calls:** `boomi_curl` (in `scripts/boomi-common.sh`) automatically respects `BOOMI_VERIFY_SSL`:
+```bash
+# Handled automatically inside boomi_curl
+[[ "${BOOMI_VERIFY_SSL:-true}" == "false" ]] && ssl_flag="-k"
+curl -s $ssl_flag ...
 ```
 
-**Curl Commands:** Use conditional SSL flag based on SERVER_VERIFY_SSL:
+**Manual Curl Commands (e.g. WSS testing):** Use conditional SSL flag based on SERVER_VERIFY_SSL:
 ```bash
 # SSL verification helper (add -k flag if SERVER_VERIFY_SSL=false)
 SSL_FLAG=$([ "${SERVER_VERIFY_SSL}" = "false" ] && echo "-k" || echo "")
@@ -882,7 +909,7 @@ Two separate settings control SSL verification in different contexts:
 
 **BOOMI_VERIFY_SSL:**
 - Controls: Platform API calls (component pull/push/create, deployments)
-- Used by: All Python CLI tools in `<skill-path>/scripts/` directory
+- Used by: `boomi_curl`/`boomi_api` in `<skill-path>/scripts/boomi-common.sh`, called by all CLI tools in that directory
 - Set to `false` when: Platform API URL uses self-signed certificate
 
 **SERVER_VERIFY_SSL:**
@@ -1414,7 +1441,7 @@ When configuring tagLists on an EDI profile, `elementKey` must point to the **lo
 
 **No tagLists**: Mapping from a repeating EDI loop (e.g., N1 loop with N1*ST and N1*BT) produces separate output documents per loop iteration. Header and detail data are duplicated across all split documents.
 
-**Segment-level elementKey**: Pointing `elementKey` at a segment (e.g., the N1 segment) instead of the containing loop causes splitting AND silent data loss -- sibling segments within the loop (N3 address, N4 city/state/zip) are excluded from scope entirely. No error is raised.
+**Segment-level elementKey**: A segment key resolves, and qualifier-matched instances of that segment route correctly — the defect is scope. Pointing `elementKey` at a segment (e.g., the N1 segment) instead of the containing loop causes splitting AND silent data loss: sibling segments within the loop (N3 address, N4 city/state/zip) are excluded from scope entirely. No error is raised.
 
 ### The Fix
 
@@ -1641,7 +1668,7 @@ New processes default to `allowSimultaneous="false"` and `updateRunDates="true"`
 ### Wrong Pattern - Listener with Default Options
 
 ```xml
-<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="true" workload="general">
+<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="true" workload="general">
   <shapes>
     <shape image="start" name="shape1" shapetype="start" userlabel="" x="96.0" y="94.0">
       <configuration>
@@ -1656,7 +1683,7 @@ New processes default to `allowSimultaneous="false"` and `updateRunDates="true"`
 ### Correct Pattern - Listener with Recommended Options
 
 ```xml
-<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="false" workload="general">
+<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="general">
   <shapes>
     <shape image="start" name="shape1" shapetype="start" userlabel="" x="96.0" y="94.0">
       <configuration>
@@ -2263,5 +2290,326 @@ Guard a map whose only mapping can come up empty by adding a second mapping from
 | UDF interface drift after removing or renumbering a key | `components/user_defined_function_component.md` |
 | Identity-value trimming in a data positioned profile, when the unmatched record is the only record | Issue #26 |
 | Profile-keyed access after a Split Documents step, which preserves the parent wrapper | Issue #34 |
+
+---
+
+## Issue #42: Missing `key` on a Set Properties `<parametervalue>` Makes the Shape Un-editable
+
+**Frequency:** High (any Set Properties shape authored programmatically rather than round-tripped through the GUI)
+**Detection:** GUI only — push, validation, versioning, deploy and execution all succeed.
+
+### The Problem
+
+A Set Properties (`documentproperties`) shape whose `<sourcevalues>` contains a `<parametervalue>` with no `key` attribute is un-editable in the platform UI. The shape still draws on the canvas; double-clicking it silently does nothing. No validation error, no warning, no request-time symptom — the process executes correctly. The defect is invisible until a human tries to edit the shape, and the only recovery is to repair the XML and re-push. A process that sets properties in many shapes can be almost entirely un-editable.
+
+**Scope.** This entry covers the top-level `<parametervalue>` elements of a Set Properties `<sourcevalues>` group. `<parametervalue>` in any other context — connector-step `<parameters>`, Message and Notify placeholders, the nested `<inputs>` of a lookup source value — is out of scope here.
+
+### Why It Happens
+
+`key` is a design-time identifier the configuration editor requires in order to render the parameter rows. It is ignored at request time — substitution and concatenation follow XML element order, never `key` — which is why omitting it produces no request-time symptom.
+
+The GUI stamps `key` on every source value it authors, so a keyless one is in practice agent-authored.
+
+### Wrong Pattern — Shape Cannot Be Opened
+
+```xml
+<sourcevalues>
+  <!-- no key attribute -->
+  <parametervalue valueType="static">
+    <staticparameter staticproperty="hello"/>
+  </parametervalue>
+</sourcevalues>
+<!-- Result: pushes, validates, versions and executes correctly; the Set Properties
+     dialog silently never opens and the shape is read-only in the GUI -->
+```
+
+### Correct Pattern — Dialog Opens
+
+```xml
+<sourcevalues>
+  <parametervalue key="0" valueType="static">
+    <staticparameter staticproperty="hello"/>
+  </parametervalue>
+</sourcevalues>
+<!-- Result: pushes, executes AND opens in the GUI -->
+```
+
+### The Rule
+
+**Emit `key` on every Set Properties source value** — a 0-based sequence over the top-level source values of each `<sourcevalues>` group, restarting at `0` per group. This matches what the GUI itself writes: adding a third source value to a group of two yields `key="2"`, and a sibling `<sourcevalues>` group in the same shape stays at `0,1` rather than shifting. Gaps are harmless; absence is not.
+
+Because the platform substitutes parameters by element order and never by `key`, adding a missing `key` is **inert at request time**: preserve element order and the repair changes no behavior, so it needs no redeploy — only a re-push and a page reload.
+
+**Opening and saving the process in the GUI does not repair it.** The editor assigns `key` only to elements it creates and leaves every untouched shape byte-identical — it does not back-fill keys elsewhere in the process. A keyless shape stays keyless until corrected XML is pushed, and since the shape cannot be opened in the first place, there is no GUI-only recovery path.
+
+### Detection
+
+Scan any process XML before pushing it. Scope the scan to `<sourcevalues>` so `<parametervalue>` in other contexts isn't flagged:
+
+```bash
+awk '/<sourcevalues>/{s=1} s && /<parametervalue/ && !/key=/{print FNR": "$0} /<\/sourcevalues>/{s=0}' process.xml
+```
+
+Any output is a defect. The reset trails the check so a `<sourcevalues>` group closed on its own opening line is still scanned. Two formatting limits: on single-line XML one `key=` anywhere on the line suppresses every match, and a `<parametervalue` whose attributes wrap onto a continuation line reports as a defect even when `key` is present on the next line. Format the document one element per line before scanning it.
+
+### Related
+
+- `references/guides/parameter_value_types.md` — per-type `<parametervalue>` forms
+- `references/steps/set_properties_step.md` — the affected shape
+- Issues #14, #15, #16, #28 and #36 are the sibling pattern: valid-and-executing XML that the GUI cannot render
+
+---
+
+## Issue #43: Unwired Output Path on a Shape That Emits Documents
+
+**Frequency:** High (any process authored programmatically whose last shape is not a designated terminal)
+**Detection:** Runtime error — push and deploy both clean. Silent on a multi-path shape.
+
+### The Problem
+
+An empty `<dragpoints/>` declares no outgoing connections. That is only correct on the four shapes that never pass documents to a downstream shape: **Stop, Exception, Return Documents, Add to Cache**. On any other shape the process pushes and deploys with no error or warning, and the defect surfaces only when the process runs.
+
+A shape that emits documents downstream — Message, Set Properties, Data Process, Notify — fails on its first execution:
+
+```
+SEVERE  <step label>  Unexpected error executing process: java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0
+java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0
+	at java.base/java.util.Collections$UnmodifiableList.get(Collections.java:1310)
+	at com.boomi.process.graph.ProcessShape.getNextWriteStore(ProcessShape.java:486)
+	at com.boomi.process.shape.MessageShape.execute(MessageShape.java:52)
+```
+
+Only the last frame varies by shape — `DocumentPropertyShape.execute`, `DataProcessShape.execute`, `NotifyShape.execute`. The failure precedes the step's own work: a Notify in this state writes none of its usual log lines, and a Data Process logs no execution result.
+
+A **Map** fails on the same condition but reports it as a document error, with no stack trace:
+
+```
+INFO     Executing Map with 1 document(s).
+INFO     Shape executed with errors in 69 ms.
+WARNING  <process name> encountered 1 document error(s)
+SEVERE   First document failure: Index 0 out of bounds for length 0
+```
+
+Searching logs for `IndexOutOfBoundsException` does not find the Map case — the message appears without the Java class name.
+
+A **Branch** does not fail at all. It executes, reports success, and the process completes normally with every declared branch silently dropped. A `numBranches="2"` Branch with empty `<dragpoints/>` is indistinguishable at push, deploy and execution time from a correctly wired one.
+
+#### The partially-unwired variant
+
+On a Decision or Try/Catch, a shape with *some* paths wired and one left unwired behaves the same way the Branch does: nothing fails. The document routed down the unwired path is **discarded** and the execution reports COMPLETE with no error. `toShape="unset"`, a typo'd target, and an omitted `<dragpoint>` are equivalent here — see `BOOMI_THINKING.md` § Dragpoints and Output Path Wiring for the authoring rule.
+
+**How silent it is depends on the shape:**
+
+- **Decision, Branch** — nothing in the log at all. The shape reports `Shape executed successfully` and the next line is `Process execution completed normally.`
+- **Try/Catch** — the engine still logs `WARNING  Try/Catch Shape sending 1 document(s) down error path`, with no catch-path shape activity after it. That orphaned warning is the only signal an unwired path gives at execution.
+
+### Why It Happens
+
+A shape that produces output asks the process graph for the document store to write into. `getNextWriteStore` indexes position 0 of that list; with no dragpoints the list is empty and the lookup throws. Nothing about this is specific to one shape type — the shared frame is the same in every case, and only the calling shape class differs.
+
+A Branch instead iterates its dragpoint list. An empty list means zero iterations: nothing to write, no exception, and no branch executed.
+
+### Wrong Pattern — Deploys Clean, Fails at Execution
+
+```xml
+<shape name="shape3" shapetype="message">
+  <configuration><message>...</message></configuration>
+  <dragpoints/>
+</shape>
+<!-- Result: push SUCCESS, deploy SUCCESS, first execution ERROR -->
+```
+
+### Correct Pattern — Wired to a Terminal
+
+```xml
+<shape name="shape3" shapetype="message">
+  <configuration><message>...</message></configuration>
+  <dragpoints>
+    <dragpoint name="shape4" toShape="shape4"/>
+  </dragpoints>
+</shape>
+<shape name="shape4" shapetype="stop">
+  <configuration><stop continue="true"/></configuration>
+  <dragpoints/>
+</shape>
+```
+
+### The Rule
+
+**End every path at Stop, Exception, Return Documents, or Add to Cache.** Any other shape needs a wired path, and a Stop step is always a legal target.
+
+Surviving execution is not the test — a Branch survives it. Wire the path regardless: a Stop communicates an intended stopping point, while a dangling shape reads as an oversight and, on a multi-path shape, hides a dropped branch.
+
+Where a shape has several outcomes, each needs its own target — see `BOOMI_THINKING.md` § Converging Outcomes for why they must not share one.
+
+### Detection
+
+Scan process XML before pushing it. Two distinct defects to find.
+
+**A shape with no outcomes at all** — an empty `<dragpoints/>` whose `shapetype` is not one of the four terminals:
+
+```bash
+awk 'match($0,/shapetype="[^"]+"/){t=substr($0,RSTART+11,RLENGTH-12)} /<dragpoints\/>/{if(t!~/^(stop|exception|returndocuments|doccacheload)$/)print FNR": "t}' process.xml
+```
+
+Any output is a defect. Two formatting limits: the shape's `shapetype` must appear on an earlier line than its `<dragpoints/>`, and an empty element written `<dragpoints></dragpoints>` or `<dragpoints />` is not matched. Format the document one element per line before scanning it.
+
+**A multi-path shape with one outcome that resolves to nothing** — `toShape="unset"`, a typo'd target, or a `<dragpoint>` omitted entirely. No string search catches all three, so check the converse: every outcome a multi-path shape declares must resolve to a `<shape name="...">` in the same process, and the shape must declare every outcome its `shapetype` carries. For Decision and Branch this static check is the only detection available. On a Trading Partner Start the `identifier` must additionally be one of `documents`, `acknowledgements`, `errors`, `archive` — any other value is inert even though its `toShape` resolves; see `steps/trading_partner_steps.md`.
+
+### Related
+
+- `BOOMI_THINKING.md` § Dragpoints and Output Path Wiring — the authoring rule
+- `references/steps/stop_step.md`, `references/steps/exception_step.md`, `references/steps/return_documents_step.md`, `references/steps/document_cache_steps.md` (Add to Cache only) — the four terminals
+- Issues #30, #36 and #40 are the sibling pattern: deploy-clean XML that fails only at execution
+
+---
+
+## Issue #44: EDI Segments Outside a Root Container Make the Profile Uneditable
+
+**Frequency:** High (any EDI profile authored programmatically rather than built through the import wizard)
+**Detection:** GUI only — push, deploy and execution all succeed; the Data Elements tab renders as never-configured.
+
+### The Problem
+
+An EDI profile whose `EdiSegment` nodes are direct children of `<DataElements>` — with no enclosing `EdiLoop isContainer="true"` — renders as an empty, never-configured profile, and any map using it shows a blank pane on that profile's side. A JSON/XML profile opposite renders fine, so the fault is the EDI profile tree renderer, not the map editor.
+
+Push, deploy and execution all succeed and the data parses. The component is not corrupt, it is **uneditable**.
+
+### Why It Is Worse Than It Looks
+
+- Opening the unrenderable profile presents an **import wizard**; completing it overwrites the component.
+- A map against such a profile cannot be safely round-tripped through the editor. Regeneration preserves only what renders, dropping every mapping that references the unrenderable side; the result executes, emitting function-fed and default values only, and looks exactly like a mapping bug.
+
+### The Rule
+
+**Every `EdiSegment` nests inside an `EdiLoop` with `isContainer="true"`, under every standard.** Root container naming is free; a single loop is enough.
+
+### Repair
+
+Wrap the existing segments in a root container **without renumbering any `EdiDataElement` key** — element keys are what `fromKey` references resolve against. Segment and loop keys are safe to change; mappings do not reference them. Then pull the map with `boomi-component-pull.sh` and confirm it still carries its full set of mappings before pushing over it (see `references/components/map_component.md` § Regenerating a Mappings Block Is Destructive).
+
+### Related
+
+- `references/components/edi_profile_component.md` § Every Segment Must Live Inside a Root Container — the authoring rule and an HL7 example
+- Issue #22 — EDI TagList elementKey Target; a segment-keyed `elementKey` works but excludes sibling segments from scope
+- Issues #36 and #42 are the sibling pattern: GUI-only defects that push, deploy and execute cleanly
+
+---
+
+## Issue #45: Unresolvable `tagLists` `elementKey` Destroys Every Document
+
+**Frequency:** Medium (any EDI profile whose `tagLists` `elementKey` values are hand-authored or renumbered)
+**Detection:** Runtime ERROR — zero documents, error blames the source data.
+
+### The Problem
+
+A `TagList` whose `elementKey` names a key that does not exist in the profile is accepted on push, stored verbatim, deploys cleanly, and renders without complaint. At execution the map emits **zero documents** and the process fails:
+
+```
+First document failure: No data produced from map '<map name>',
+                        please check source profile and make sure it matches source data.
+```
+
+Not an empty document — nothing at all. Downstream steps are skipped.
+
+### Why It Is Hard to Diagnose
+
+The error names the source data, which is the wrong place to look. Two profiles differing only in `elementKey` have byte-identical `DataElements` and push and deploy identically; one routes correctly, the other destroys the document.
+
+```xml
+<TagList elementKey="90" listKey="1">   <!-- REF_Loop is key 90 — resolves -->
+<TagList elementKey="95" listKey="1">   <!-- no node has key 95 — zero documents -->
+```
+
+### The Rule
+
+**When a map produces no data and its source profile has `tagLists`, confirm every `elementKey` resolves to a key in that profile before investigating the payload.**
+
+### Related
+
+- Issue #22 — EDI TagList elementKey Target; the companion hazard of a *resolvable* `elementKey` pointed at a segment rather than its loop
+- Issue #41 — A Map With No Satisfied Mapping Emits Zero Documents; same symptom, different cause
+
+---
+
+## Issue #46: Flat File Split Documents Misconfiguration
+
+**Frequency:** High (any flat file split whose mode or headers were set in the GUI, or left implicit)
+**Detection:** Runtime error on a missing link element. Silent row loss on headers — or an ERROR naming the map.
+
+### The Problem
+
+Two independent defects, both surviving push, deploy and a GUI save:
+
+**No link element.** `splitOption` absent falls back to `split_profile`, not `split_line`. Without `profileId`, `linkElementKey` and `linkElementName` the step fails when a document reaches it:
+
+```
+java.lang.IllegalArgumentException: The Link Element was not selected for a Split Documents By Profile processing step.
+```
+
+Two ordinary GUI actions reach that config with no warning: switching `Split Options` to `Split By Profile` and saving with the pickers unset, and a `Split By Profile` → `Split By Line` → `Split By Profile` round trip, which clears both pickers and turns a working shape into a failing one.
+
+**Headers dropped.** A downstream step parsing split output against a `useColumnHeaders="true"` profile consumes each document's first line as a header. Unless `headersOption="retain"` re-emits the header, that line is a data row and it is lost — silently, at COMPLETE. A document left with zero data rows fails the map instead, and no documents reach the next step:
+
+```
+No data produced from map '<map name>', please check source profile and
+make sure it matches source data.
+```
+
+The error names the map and its source profile. Both are correct; the split upstream is the cause, and `headersOption` is never mentioned.
+
+### The Rule
+
+**Always write `splitOption` explicitly, with all three profile attributes when it is `split_profile`. Where a downstream step parses the output against a `useColumnHeaders="true"` profile, `headersOption="retain"` is the only correct value.** For the per-sub-mode breakdown of both settings, see `references/steps/data_process_step.md` § Flat File.
+
+### Related
+
+- Issue #34 — Split Documents Preserves the Parent Wrapper; same map error after a split, different cause
+- Issue #41 — A Map With No Satisfied Mapping Emits Zero Documents; same map error, general case
+
+---
+
+## Issue #47: Dangling `fromCacheJoinKey` Fails the Execution With a Bare NPE
+
+**Frequency:** Low (maps with a `<DocumentCacheJoins>` block)
+**Detection:** Runtime ERROR during process initialization — push and deploy both succeed, no step runs.
+
+### The Problem
+
+A `<Mapping fromCacheJoinKey="N">` where no `<DocumentCacheJoin>` in the map has `docCacheJoinId="N"`:
+
+```
+Error attempting to load map definitions from map '<map name>', shape <map component id>
+Caused by: java.lang.NullPointerException
+```
+
+The message never names the bad reference, and the "shape" ID is the map component ID.
+
+### The Rule
+
+**Every non-zero `fromCacheJoinKey` must equal a `docCacheJoinId` in the same map.** See `references/components/map_component.md` § Document Cache Joins.
+
+---
+
+## Issue #48: Join `srcParentKey` Above the Record Cross-Pairs Every Record
+
+**Frequency:** Medium (Document Cache joins on a source with repeating records)
+**Detection:** Silent — push, deploy and execution all succeed; the output is valid and the values look plausible.
+
+### The Problem
+
+A `<DocumentCacheJoin>` whose `srcParentKey` is broader than the element that directly contains `srcLinkKey` — the root, an array or list container, a flat file `Record`, or `key="0"` — pairs every matched cached document with every source record. Four records whose keys (`C1`, `C2`, an unmatched `ZZZ`, `C3`) match three cached documents produce twelve output records:
+
+```
+L1/NAME-C1  L2/NAME-C1  L3/NAME-C1  L4/NAME-C1
+L1/NAME-C2  L2/NAME-C2  L3/NAME-C2  L4/NAME-C2
+L1/NAME-C3  L2/NAME-C3  L3/NAME-C3  L4/NAME-C3
+```
+
+Only `L1/NAME-C1`, `L2/NAME-C2` and `L4/NAME-C3` are correct, and `L3`, which matches nothing, appears three times with real cache data. With a single-record source the broader scope gives the correct result, so single-record test data does not reveal the error.
+
+### The Rule
+
+**Set `srcParentKey` to the element that directly contains `srcLinkKey`.** Test joins with at least two source records whose keys match different cached documents. For the per-format element, see `references/components/map_component.md` § Document Cache Joins.
 
 ---

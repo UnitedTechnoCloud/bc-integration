@@ -9,14 +9,14 @@ The MCP (Model Context Protocol) Server Connector transforms deployed Boomi proc
 **Connector Type:** `officialboomi-X3979C-mcp-prod`
 
 **Use Cases:**
-- Expose Boomi integrations to AI assistants (Claude, ChatGPT, etc.)
+- Expose Boomi integrations to AI agents/assistants
 - Create tool-based interfaces for automated workflows
 - Bridge enterprise systems with AI agent frameworks
 
 ## Architecture
 
 ```
-AI Agent (Claude, etc.)
+AI Agent
     ↓ MCP Protocol (SSE)
 Boomi Runtime (on-premise)
     ↓
@@ -122,32 +122,9 @@ Components must be created in this order:
 [Return Documents] ←──────────────────┘
 ```
 
+The process must end with a single Return Documents step — all branches converge to it. For converging outcomes, see `BOOMI_THINKING.md` § Converging Outcomes.
+
 ## Client Configuration
-
-### Claude Desktop
-
-Add to `claude_desktop_config.json` (Settings > Developer > Edit Config):
-
-```json
-{
-  "mcpServers": {
-    "shopify": {
-      "command": "npx",
-      "args": ["mcp-remote", "http://localhost:8000/mcp/shopify/sse", "--allow-http"]
-    }
-  }
-}
-```
-
-### MCP Inspector
-
-Interactive testing tool: https://modelcontextprotocol.io/legacy/tools/inspector
-
-### Amazon Q CLI
-
-1. Install: https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-installing.html
-2. Configure MCP: https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-mcp-config-CLI.html
-3. Run `qchat`, verify MCP Server loads
 
 ### Agentstudio Integration
 
@@ -180,16 +157,3 @@ Interactive testing tool: https://modelcontextprotocol.io/legacy/tools/inspector
 ### 30-Minute Session Timeout (API Control Plane)
 - Sessions auto-terminate after 30 minutes
 - **Workaround:** Implement session renewal in client
-
-## Changelog
-
-**2025-11 (Version 2, Current)**
-- Fixed Purge Data Immediately / Missing Data Store issue
-- Added Low Latency and Bridge Mode support
-- Fixed servlet teardown for proper disposal
-
-**2025-10 (Version 1)**
-- Renamed to "MCP Server (Tech Preview)"
-
-**2025-09**
-- Initial Technology Preview release

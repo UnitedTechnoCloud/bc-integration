@@ -14,6 +14,8 @@ MFT connector steps execute file transfer operations against Boomi's Thru-powere
 - Dropping off files to MFT flows (CREATE)
 - Updating file processing outcomes (UPDATE)
 
+This is the Boomi Managed File Transfer (Legacy) connector. For new builds use the SDK-based connector (`officialboomi-X3979C-manage-prod`) — see `mft_v2_connector_step.md`.
+
 ## Step Configuration
 
 ```xml
@@ -69,7 +71,7 @@ Set before the CREATE step using Set Properties:
 <documentproperty name="Thru MFT — Partner Connector - FileName"
     propertyId="connector.thru-8SHH0W-thrumf-technology.fileName">
   <sourcevalues>
-    <parametervalue valueType="static">
+    <parametervalue key="0" valueType="static">
       <staticparameter staticproperty="output.txt"/>
     </parametervalue>
   </sourcevalues>

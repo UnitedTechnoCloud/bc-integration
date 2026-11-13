@@ -26,7 +26,7 @@ UDFs are managed through the standard Component API — create, push, pull, and 
 ## When to Use
 - **A transformation needs two or more function steps feeding one another** (e.g. Get Current Date → Date Format, or lookup → string cleanup → property set).
 - **The same logic is needed in more than one map** — a UDF is referenced by ID, so all consumers share one definition. A single-step UDF is legal but only worthwhile for this reuse case; for a single-step, single-map transformation, use a plain inline function instead — the UDF adds indirection for no gain.
-- **When a transformation is expressible as a chain of standard function types, prefer a UDF over a Scripting function** — the same native-components-first principle as the rest of this skill (see BOOMI_THINKING.md): function steps stay visible, configurable, and maintainable in the GUI, while scripts are opaque to non-authors. Reach for Scripting (inline or a `script.mapping` component) only when the logic genuinely needs code — arbitrary branching or computation that a standard-function chain cannot express.
+- **When a transformation is expressible as a chain of standard function types, prefer a UDF over a Scripting function** — the same native-components-first principle as the rest of this skill (see BOOMI_THINKING.md): function steps stay visible, configurable, and maintainable in the GUI, while scripts are opaque to non-authors. Reach for Scripting (inline or a `script.mapping` component) only when the logic genuinely needs code — arbitrary branching or computation that a standard-function chain cannot express. Note that **conditionals are not automatically in that category**: value selection is a lookup, and gating or if/then/else is expressible with standard functions — see "Expressing a Conditional" in `map_component_functions.md` before reaching for a script.
 
 ## Component Structure
 
@@ -138,7 +138,7 @@ A UDF whose x order matches its positions is fully drag-safe. A UDF where they d
 ## Step Types Inside a UDF
 Every standard function type behaves identically inside a UDF as at map level, with the exceptions listed below. Mirror each type's documented map-level XML (ports, `category`/`type`, `<Configuration>`) exactly inside the UDF — see `map_component_functions.md`. Identical behavior includes the stateful machinery:
 
-- The **aggregators** (Running Total, Sum, Count, Line Item Increment) keep their cross-record semantics — grouping per Reset Value, order-sensitive control-break, presence gating, per-row broadcast — exactly as documented at map level. A UDF invocation is not an isolated per-record evaluation context.
+- The **aggregators** (Running Total, Sum, Count, Line Item Increment) keep their cross-record semantics — grouping per Reset Value, order-sensitive control-break, presence gating, repeating-target row keying — exactly as documented at map level. A UDF invocation is not an isolated per-record evaluation context.
 - **Sequential Value** counters persist per `keyname` across executions identically.
 - **Connector Call** performs live connector operations; the connection and operation become dependencies of the UDF itself.
 - **Scripting** works inline and `script.mapping`-component-backed (empty embedded `<ScriptToExecute/>` resolves the referenced script); the same `script.mapping` component may be referenced by more than one step in a single UDF, and it registers as a dependency of the UDF.

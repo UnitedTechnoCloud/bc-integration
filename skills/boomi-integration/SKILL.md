@@ -18,6 +18,13 @@ This is the Boomi Process Development Framework - a reusable skill that enables 
 
 Run scripts from the project workspace directory (so `.env` and `active-development/` resolve correctly), but always invoke them with the full absolute `<skill-path>/scripts/...` path.
 
+If you find yourself needing to craft custom curl - stop and discuss with the user before proceeding. This is unexpected.
+
+If you attempt to call into the Boomi platform and get an auth error - stop and discuss with the user before proceeding. Repeated calls with invalid auth will get us locked out of the platform.
+
+## Peripheral Skills
+If the `boomi-marketplace` skill is available, it can search a portfolio of Boomi design patterns, use cases, and reusable assets. Before hand-building a process, consider offering it. With the user's approval you may import assets for reference or as reusable templates.
+
 ## Documentation Architecture
 
 **SKILL.md is the navigation hub**: This file contains file references and routing guidance. Other documentation files contain minimal cross-references by design - this prevents deep hierarchical dependencies (which causes skimming at lower levels) and keeps navigation centralized.
@@ -30,9 +37,11 @@ Run scripts from the project workspace directory (so `.env` and `active-developm
 - **REST API on Advanced atom**: api_service_component.md + web_services_server_start_shape_operation.md + process_component.md + api_conversion_patterns.md
 - **Map transformations**: map_component.md + map_component_functions.md + source/target profile docs
 - **Event Streams**: event_streams_connection + operation + steps + platform_entities/event_streams.md
-- **B2B/EDI Trading Partners**: trading_partner_component.md + trading_partner_steps.md + edi_profile_component.md + platform_entities/edi_b2b.md
+- **B2B/EDI Trading Partners**: trading_partner_component.md + trading_partner_steps.md + edi_profile_component.md (+ hl7_profile_component.md for HL7 v2) + platform_entities/edi_b2b.md
+- **Find Changes (CDC)**: steps/find_changes_step.md + matching profile doc (flat_file_profile_component.md / xml_profile_component.md / database_profile_component.md) + process_component.md + BOOMI_THINKING.md (Converging Outcomes)
 - **Disk V2 (File System)**: diskv2_connection_component + diskv2_connector_operation_component + diskv2_connector_step
-- **MFT (Managed File Transfer)**: mft_connection_component + mft_connector_operation_component + mft_connector_step
+- **MFT (Managed File Transfer)**: mft_v2_connection_component + mft_v2_connector_operation_component + mft_v2_connector_step. For existing `connectorType="thru-8SHH0W-thrumf-technology"` (Legacy) assets, see mft_connection_component + mft_connector_operation_component + mft_connector_step instead
+- **SFTP**: sftp_connection_component + sftp_connector_operation_component + sftp_connector_step
 - **Mail (IMAP) — Email send/receive/move**: mail_imap_connection_component + mail_imap_connector_operation_component + mail_imap_connector_step + (document_cache_component for attachments). For existing `connectorType="mail"` assets, see mail_component.md instead
 - **MCP Server (AI Tool Exposure)**: mcp_server_connection_component + mcp_server_operation_component + mcp_server_start_step + platform_entities/mcp_server.md
 - **Data Hub (MDM)**: datahub_connector_operation_component + connector_step + BOOMI_THINKING.md. The paired connection is bootstrapped by the `boomi-datahub` skill (`datahub-connection.sh bootstrap connector`), not built in the UI
@@ -74,7 +83,7 @@ When working on any Boomi process or component modifications:
 
 **READ BEFORE WRITING**: Always read `references/steps/[step_type].md` completely before generating XML. Validation errors typically mean the XML doesn't match documented structure.
 
-**Large Profiles**: When attempting to read an XML profile file and encountering a "file too large" error, immediately run `boomi-profile-inspect.py` (Python stdlib) on it. This generates a searchable `distilled_<name>.json` file alongside the source profile XML. Search that file for field keys/paths, and grep the original XML by key if comments are needed.
+**Large Profiles**: When attempting to read a profile file and encountering a "file too large" error, immediately run `boomi-profile-inspect.py` (Python stdlib) on it. This generates a searchable `distilled_<name>.json` file alongside the source profile XML. Search that file for field keys/paths, and grep the original XML by key if comments are needed.
 
 **External Documentation Strategy:**
 Default to local `references/` — curated for this skill. Beyond it, don't answer platform behavior from memory: start at `https://developer.boomi.com/llms.txt` (root, no `/md`), which fans out to per-section indexes of every page that has a Markdown twin. Fetch a listed page as Markdown by prepending `/md` and appending `.md` (`https://developer.boomi.com/md/docs/Connectors/Testing_connector.md`); unlisted paths return 404 with an HTML body despite the extension, so branch on status and fall back to the HTML page. Prefer the `.md` form for `/docs/api/*` — same operations and schemas at a fraction of the HTML's size — and link users the frontmatter `canonical_html_url`, never the spec JSON. `help.boomi.com` (HTML) works, `community.boomi.com` does not (JavaScript-heavy); if all sources fail, ask the user to paste content — don't proceed without critical information.
@@ -113,12 +122,14 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── xml_profile_component.md          # Use when: defining XML document schemas with namespaces, accessing XML elements/attributes in Maps/Set Properties
 │   │   ├── flat_file_profile_component.md    # Use when: defining CSV/delimited file schemas, creating placeholder profiles for Map component sources
 │   │   ├── edi_profile_component.md          # Use when: defining EDI document schemas, troubleshooting EDI parsing failures, understanding Boomi-specific EDI configuration. Includes Transaction Set ID → GS-01 mapping and HIPAA GS-08 Implementation Convention codes.
+│   │   ├── hl7_profile_component.md          # Use when: building or editing an HL7 v2 EDI profile (`standard="hl7"`) - Header-only structure, CR terminator, the compId composite model and expansion, write path and escaping, the repeating-field data-loss trap, version differences. Read with edi_profile_component.md.
 │   │   ├── database_profile_component.md     # type: "profile.db". Use when: defining request/response structure for the Database (Legacy) connector - SQL statements, stored procedures, dynamic vs standard insert/update/delete, result-set columns. NOT for Database V2 (which uses JSON profiles).
 │   │   ├── map_component.md                  # Use when: creating field-to-field transformations between profiles, understanding map generation rules and mapping patterns
 │   │   ├── map_component_functions.md        # Use when: applying transformations within maps - string manipulation, date formatting, numeric/math, lookups (cross reference, simple, document cache, SQL), connector calls, custom scripting, and process/document property get-set
 │   │   ├── map_script_component.md           # Use when: creating a standalone reusable map-scripting component (type="script.mapping", Groovy or JavaScript) and referencing it from a Map's Scripting function instead of an inline script
 │   │   ├── user_defined_function_component.md # type: "transform.function". Use when: you need to chain multiple map functions together — a plain Map component forbids wiring one function into another, so a User-Defined Function (UDF) packages the multi-step pipeline into one reusable component. Also for consuming a UDF from a map (FunctionStep category="userdefined") or editing a UDF that deployed processes already reference
 │   │   ├── process_script_component.md       # Use when: creating a standalone reusable Process Script component (type="script.processing", Groovy or JavaScript) and referencing it from a Data Process Custom Scripting step via useComponent="true" instead of an inline script
+│   │   ├── xslt_stylesheet_component.md      # Use when: transforming XML with XSLT — creating an XSLT Stylesheet component (type="xslt") and referencing it from a Data Process XSLT Transformation step (process type 16); security settings, boomi:get-ddp/set-ddp
 │   │   ├── rest_connection_component.md      # connectorType: "officialboomi-X3979C-rest-prod". Use when: creating REST API connections - base URLs, authentication patterns, timeouts, connection pooling
 │   │   ├── rest_connector_operation_component.md # Use when: defining REST operations - HTTP methods, resource paths, headers, query parameters, request/response profiles
 │   │   ├── openapi_connection_component.md   # connectorType: "officialboomi-X3979C-opena2-prod". Use when: creating OpenAPI connector connections - spec location (`spec`), base server URL, authentication (NONE/API_KEY/BASIC), API-key location, connection pooling
@@ -141,8 +152,12 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── custom_connector_operation_component.md # Use when: creating operations for custom SDK connectors - subType selects the connector build, operationType/customOperationType contract, per-document field overrides. Not the REST operation template
 │   │   ├── diskv2_connection_component.md       # connectorType: "disk-sdk". Use when: creating Disk V2 connections - local/network file system access, directory configuration, cloud runtime restrictions
 │   │   ├── diskv2_connector_operation_component.md # Use when: defining Disk V2 operations - file CREATE/UPSERT/GET/QUERY/LIST/DELETE/LISTEN, filters, actionIfFileExists, directory overrides
-│   │   ├── mft_connection_component.md         # connectorType: "thru-8SHH0W-thrumf-technology". Use when: creating MFT connections - Thru MFT partner connector credentials
-│   │   ├── mft_connector_operation_component.md # Use when: defining MFT operations - file pickup, drop-off, status updates
+│   │   ├── mft_v2_connection_component.md      # connectorType: "officialboomi-X3979C-manage-prod" — Boomi Managed File Transfer. Use when: creating MFT connections - OAuth 2.0 client credentials from a Boomi MFT Connector endpoint
+│   │   ├── mft_v2_connector_operation_component.md # connectorType: "officialboomi-X3979C-manage-prod". Use when: defining MFT List/Get/Create operations - File Metadata vs File (with content) List (content List consumes files), Get ID input, File ID filter, file name, per-action tracked properties
+│   │   ├── mft_connection_component.md         # connectorType: "thru-8SHH0W-thrumf-technology" — Boomi Managed File Transfer (Legacy). Use when: working with existing Legacy MFT assets - Thru partner connector credentials. NOT Boomi Managed File Transfer (SDK)
+│   │   ├── mft_connector_operation_component.md # Legacy MFT. Use when: working with existing Legacy MFT operations - file pickup, drop-off, status updates. NOT Boomi Managed File Transfer (SDK)
+│   │   ├── sftp_connection_component.md        # connectorType: "officialboomi-X3979C-sftpvx-prod" — SFTP. Use when: creating SFTP connections, or pinning the server host key (Known Host Entry)
+│   │   ├── sftp_connector_operation_component.md # Use when: defining SFTP Write/Read/List operations, or setting any SFTP directory value
 │   │   ├── mail_imap_connection_component.md   # connectorType: "mailsdk". Use when: creating Mail (IMAP) connections - SMTP outbound + IMAP inbound, Basic Auth or OAuth 2.0, connection security (NONE/SSL_TLS/STARTTLS)
 │   │   ├── mail_imap_connector_operation_component.md # Use when: defining Mail (IMAP) operations - Receive (query with filters, attachment cache), Send (with attachments via cache), Move (folder-to-folder with request profile)
 │   │   ├── mail_component.md                 # connectorType: "mail" — Mail (legacy, SMTP send + POP3 get). Use when: working with existing Mail assets or when the user explicitly requests Mail. Never choose over Mail (IMAP) on agent judgment alone. NOT Mail (IMAP)
@@ -156,7 +171,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── cross_reference_table_component.md # Use when: creating static lookup tables for value translation between systems, using cross reference lookups in maps or parameter values (Set Properties, Message, Notify)
 │   │   ├── process_property_component.md    # Use when: creating typed, reusable process property collections for environment-specific config, reading process property values in Set Properties or Groovy scripts
 │   │   ├── document_cache_component.md      # Use when: creating Document Cache components - defining indexes, keys, profile types for in-memory document caching
-│   │   └── process_extensions.md              # Use when: making connections, operations, or DPPs configurable per-environment via processOverrides and the Environment Extensions API
+│   │   └── process_extensions.md              # Use when: making connections, operations, DPPs, process property components, or cross reference tables configurable per-environment via processOverrides and the Environment Extensions API
 │   │
 │   ├── steps/                   # Process step XML reference documentation
 │   │   ├── start_step.md        # Process entry points. Use when configuring new process canvases - includes scheduled, manual, and listener API processes
@@ -167,19 +182,22 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── boomi_for_sap_step.md    # Boomi for SAP operations. Use when: querying Core-exposed SAP objects with JSON responses, runtime parameter binding for SAP filters
 │   │   ├── custom_connector_step.md # Custom SDK connectors. Use when: using connectors built with Boomi's Java Connector SDK
 │   │   ├── diskv2_connector_step.md # Disk V2 file operations. Use when: reading, writing, querying, listing, or deleting files on local/network file systems
-│   │   ├── mft_connector_step.md    # MFT operations. Use when: picking up or dropping off files via Boomi MFT (Thru)
+│   │   ├── mft_v2_connector_step.md # connectorType: "officialboomi-X3979C-manage-prod" — Boomi Managed File Transfer. Use when: listing, downloading, or uploading files via Boomi MFT - List as Start, Get ID from fileId, per-document File Name override
+│   │   ├── mft_connector_step.md    # connectorType: "thru-8SHH0W-thrumf-technology" — Legacy MFT. Use when: working with existing Legacy MFT steps (Thru). NOT Boomi Managed File Transfer (SDK)
+│   │   ├── sftp_connector_step.md   # Use when: adding SFTP Write/Read/List steps - document properties, parameters, List input document
 │   │   ├── mail_imap_connector_step.md # Mail (IMAP) connector step. Use when: sending email via SMTP, receiving email via IMAP (with attachment handling), or moving messages between mailbox folders (for `connectorType="mail"`: see components/mail_component.md)
 │   │   ├── event_streams_steps.md   # Event Streams operations. Use when: pub/sub messaging, event-driven processing, async communication between processes
 │   │   ├── agent_step.md            # AI Agent step. Use when: integrating Agent Control Tower agents into processes, or sending files to an agent for extraction/review
 │   │   ├── message_step.md      # Template engines for generating content. Use when: building payloads, creating test data, clearing documents
 │   │   ├── map_step.md          # Data transformation between profiles. Use when: transforming existing structured data between different schemas
 │   │   ├── set_properties_step.md # Variable creation (DDPs/DPPs). Use when: extracting values for later use, building dynamic paths, managing state, setting arbitrary variables
-│   │   ├── data_process_step.md # Document manipulation and custom scripting. Use when: transforming data Maps can't handle, splitting/combining documents, encoding/compression, custom scripted logic
+│   │   ├── data_process_step.md # Document manipulation and custom scripting. Use when: transforming data Maps can't handle, splitting/combining documents, encoding/compression, custom scripted logic, XSLT transformations
 │   │   ├── data_process_custom_scripting.md # Use when: writing Groovy (1.5/2.4) or JavaScript in Data Process steps, either inline or referencing a reusable Process Script component - development philosophy, dataContext patterns, property management, language tokens, critical rules
 │   │   ├── decision_step.md     # Conditional routing based on comparisons. Use when: implementing if/then logic, routing based on property values or field comparisons
 │   │   ├── route_step.md        # Multi-path conditional routing. Use when: routing documents to 3+ paths based on a value (switch/case), replacing chained decision steps
 │   │   ├── business_rules_step.md # Named-rule document validation with Accepted/Rejected routing. Use when: validating a document against one or more conditions where the failure reason must be reported, or replacing Decision chains that exist only to validate
 │   │   ├── branch_step.md       # Sequential multi-path document routing. Use when: same data needs different processing for different targets or a process should execute multiple distinct workflows
+│   │   ├── find_changes_step.md # Change Data Capture routing (shapetype changedatacapture). Use when: detecting Add/Update/Delete between full-dataset executions via a runtime-stored snapshot; single inbound, three labeled outputs. Flat File / XML / DB profiles only (no JSON)
 │   │   ├── flow_control_step.md # Batching and parallel fiber execution. Use when: serializing downstream steps per-document, splitting documents into batches, or spreading documents across parallel threads/processes
 │   │   ├── process_call_step.md # Subprocess invocation and return handling. Use when: modularizing logic, enabling test mode for listener-based processes, combining documents across branches, wiring multiple return paths so they stay readable on the canvas
 │   │   ├── process_route_step.md # Use when: dynamically selecting which subprocess runs from a route key resolved at execution time (vs a static Process Call). Requires a Process Route component, the resource::rout: reference prefix, and independent deploy of every participant.
@@ -192,10 +210,10 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── mcp_server_start_step.md  # MCP Server entry point. Use when: creating listener processes that expose tools to AI agents via MCP protocol
 │   │   ├── trading_partner_steps.md # B2B/EDI start and send shapes. Use when: building processes that receive from or send to trading partners via AS2, FTP, SFTP, etc.
 │   │   ├── document_cache_steps.md # Document Cache steps (Add, Retrieve, Remove). Use when: adding documents to cache, retrieving cached documents, removing from cache, using cache lookups as parameter sources
-│   │   └── shape_notes.md       # Canvas annotations visible in GUI. Use when: user explicitly requests adding documentation notes to process shapes
+│   │   └── shape_notes.md       # Canvas annotations visible in GUI, one per shape, ~300 character hard limit each (count them, do not eyeball). Use when: user explicitly requests adding documentation notes to process shapes
 │   │
 │   └── platform_entities/       # Platform service configuration and management
-│       ├── edi_b2b.md           # B2B/EDI architecture, trading partner concepts, supported standards, acknowledgment flows, transaction pair dependencies, X12↔EDIFACT equivalence, validation, communication connectors
+│       ├── edi_b2b.md           # B2B/EDI architecture, trading partner concepts, supported standards, acknowledgment flows, transaction pair dependencies, X12↔EDIFACT equivalence, validation, communication connectors. Use when: orienting on B2B/EDI concepts before building trading partner components or processes
 │       ├── event_streams.md     # Topics, subscriptions, dead-letter queues, and GraphQL entity management
 │       ├── boomi_for_sap.md     # Boomi for SAP architecture, scope boundaries, JSON-formatted SAP integration via Core module
 │       ├── flow.md              # Boomi Flow integration: FSS deployment workflow, Flow Service components, multi-platform development (build Integration first, then Flow)
@@ -207,6 +225,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
     ├── boomi-env-check.sh       # Report which .env vars are set (without revealing values) and which tools are installed (pre-flight)
     ├── boomi-folder-create.sh   # Create organized project folders on platform
     ├── boomi-folder-list.sh     # List a folder's child folders or whole subtree (id + fullPath)
+    ├── boomi-folder-rename.sh   # Rename a folder in place (id, parent, contents unchanged)
     ├── boomi-component-create.sh # Create new components and push to platform
     ├── boomi-component-push.sh  # Update existing components with local changes
     ├── boomi-component-pull.sh  # Download components with dependency resolution
@@ -342,11 +361,15 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
 - `boomi-component-diff.sh` - Compare two versions of a component via ComponentDiffRequest
     - Required: `--component-id`, `--source <N>`, `--target <N>`
 
-- `boomi-component-search.sh` - Query components by `--folder <id|name|%pattern%|path>` (flat by default; add `--recursive` for the whole subtree), `--name <%pattern%>`, `--type <csv>` (API-level types — `connector-settings`=connection, `connector-action`=operation), or `--related-to <id>` (cannot combine with other filters). Writes `active-development/inventories/component_search_<timestamp>.json`; implicit `currentVersion=true`, `deleted=false` on non-related-to queries — which scopes results to the account default branch.
+- `boomi-component-search.sh` - Query components by `--folder <id|name|%pattern%|path>` (flat by default; add `--recursive` for the whole subtree), `--name <%pattern%>`, `--type <csv>` (API-level types — `connector-settings`=connection, `connector-action`=operation), or `--related-to <id>` ("Where Used"; cannot combine with other filters; `--branch <name|id>` scopes it to a branch, defaulting to `BOOMI_DEFAULT_BRANCH_ID`). Writes `active-development/inventories/component_search_<timestamp>.json`; implicit `currentVersion=true`, `deleted=false` on non-related-to queries — which scopes results to the account default branch.
     - 0 components in a folder usually means they sit in subfolders — retry with `--recursive` before reporting the folder empty.
 
 - `boomi-folder-list.sh` - List folders as `id<TAB>fullPath`, plus `active-development/inventories/folder_list_<timestamp>.json`
     - No args lists top-level folders; `--folder <id|name|%pattern%|path>` lists its children, `--recursive` its whole subtree
+
+- `boomi-folder-rename.sh` - Rename a folder; its id, parent, and contents are unchanged, so components' `folderId` stays valid
+    - Required: `--folder <id|name|path>` (must resolve to one folder), `--new-name <name>`
+    - Refuses a name a sibling folder already uses (the platform itself would accept the duplicate)
 
 - `boomi-branch.sh` - Branch and merge operations (merge subcommands only for Branch & Merge enabled accounts)
     - `default` — report the account default branch (read-only). Runs on any account; it queries component metadata, not the Branch endpoints.
@@ -378,9 +401,10 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
     - Optional: `--process-id`, `--status`, `--since`, `--limit` (default 3)
     - Log download: `--execution-id <id> --logs` (requires `unzip`; exits non-zero rather than reporting an empty log if extraction fails)
 
-- `boomi-profile-inspect.py` (Python stdlib) - Extract field inventory from large XML profiles
+- `boomi-profile-inspect.py` (Python stdlib) - Extract field inventory from large profiles
     - Required: `profile_path` (positional)
-    - Use when: An XML profile file is too large to read directly. Writes a `distilled_<name>.json` file alongside the source profile XML.
+    - Optional: `--all` (JSON only: also list container nodes)
+    - Use when: A profile file is too large to read directly. Writes a `distilled_<name>.json` file alongside the source profile XML.
     - Python stdlib only — no pip dependencies
 
 - `event-streams-setup.sh` - Create and manage Event Streams topics, subscriptions, and tokens
@@ -400,6 +424,7 @@ Re-use existing connections (see § Connection Discovery above). Component XML r
 Required for building and testing. Full setup in `references/guides/user_onboarding_guide.md`.
 - Platform API: `BOOMI_API_URL`, `BOOMI_USERNAME`, `BOOMI_API_TOKEN`, `BOOMI_ACCOUNT_ID`, `BOOMI_ENVIRONMENT_ID`, `BOOMI_TEST_ATOM_ID`, `BOOMI_VERIFY_SSL`, `BOOMI_TARGET_FOLDER`
 - Shared Web Server: `SERVER_BASE_URL`, `SERVER_AUTH_TYPE` (`basic | bearer | none`; unset = infer), `SERVER_USERNAME` + `SERVER_TOKEN` (Basic), `SERVER_BEARER_TOKEN` (Bearer), `SERVER_VERIFY_SSL` — used for WSS testing and **FSS connectivity** (see `references/guides/process_testing_guide.md`, `references/platform_entities/flow.md`). Boomi public cloud runtimes only support Basic; local runtimes can use other auth modes — see `references/platform_entities/shared_web_server.md` before assuming Basic is required.
+- Partner / Sub-Account (optional): `PARTNER_OVERRIDE` (`true` to route through Partner API), `PARTNER_SUB_ACCOUNT` (sub-account ID). Both must be set together. `BOOMI_ACCOUNT_ID` must be the parent partner account; the API token must come from it. One sub-account at a time.
 
 ## Development Patterns
 
@@ -473,6 +498,8 @@ bash <skill-path>/scripts/boomi-deploy.sh subprocess.xml  # Required for standal
 bash <skill-path>/scripts/boomi-test-execute.sh --process-id <subprocess-guid>
 ```
 
+**Exception — Process Route:** its subprocesses are not bundled with the parent; deploy the changed component itself. See `references/steps/process_route_step.md`.
+
 See `references/guides/boomi_error_reference.md` Issue #3 for details.
 
 ### Folder Management & Component Creation
@@ -515,7 +542,9 @@ When dependencies are unavailable (missing credentials, GUI-required components,
 4. Validate before push
 5. Read sync state and update dependent component references
 
-**Wiring rule:** never wire two outcomes of one step to the same target step — the labels overprint and the canvas becomes unreadable. Interpose one inert Notify per outcome; see `references/BOOMI_THINKING.md` § Converging Outcomes.
+**Wiring rule:** wire every outcome of a multi-path step. Wire an outcome with no work to its own Stop with `continue="true"`. See `references/BOOMI_THINKING.md` § Dragpoints and Output Path Wiring.
+
+**Converging rule:** never wire two outcomes of one step to the same target step — the labels overprint and the canvas becomes unreadable. Interpose one inert Notify per outcome; see `references/BOOMI_THINKING.md` § Converging Outcomes.
 
 **Common XML Mistakes** (see `references/guides/boomi_error_reference.md` Issue #8):
 - Set Properties: Use `shapetype="documentproperties"` NOT `"setproperties"`

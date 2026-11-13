@@ -6,9 +6,12 @@
 - Component Structure
 - Default Values
 - Datetime Field Mapping
+- Target Write Behavior
 - Map Generation Rules
+- Regenerating a Mappings Block Is Destructive
 - Mapping Patterns
 - Instance Identifier and Qualifier Mappings
+- Document Cache Joins
 - Observed Patterns
 - Complete Examples
 - Map Functions
@@ -62,7 +65,7 @@ One `Mapping` per leaf field covers every occurrence of a repeating element — 
 - `<Mappings>`: Container for individual field mappings
 - `<Functions/>`: For transformation functions (empty if unused)
 - `<Defaults/>`: For default/fallback values (empty if unused)
-- `<DocumentCacheJoins/>`: For lookups (empty if unused)
+- `<DocumentCacheJoins/>`: Document Cache joins (empty if unused) — see § Document Cache Joins
 
 All four elements must be present even if empty.
 
@@ -150,6 +153,19 @@ When profile fields have `dataType="datetime"`, Boomi's internal datetime pipeli
 | datetime | datetime | Yes (auto-conversion) |
 | datetime | character | Yes Date Format function must have an input mask of `yyyyMMdd HHmmss.SSS`|
 
+## Target Write Behavior
+
+Rules that apply as a value is written to a target element, whatever produced it — a function chain, or a direct field mapping with no function in the map at all.
+
+**Edge whitespace is trimmed.** Leading and trailing whitespace on the value is removed as it is written to a character target element; interior whitespace is preserved (`␣` marks a literal space):
+
+| Source value | Target value |
+|---|---|
+| `␣␣AAA␣␣` | `AAA` |
+| `[␣␣AAA␣␣]` | `[␣␣AAA␣␣]` |
+
+A separator or pad that must survive cannot be whitespace at either end of the value. This covers spaces written to an XML character target element; tabs, newlines, and non-XML target profiles are outside its scope.
+
 ## Map Generation Rules
 
 ### CRITICAL: Filter by isMappable Before Generating Mappings
@@ -185,6 +201,19 @@ When profile fields have `dataType="datetime"`, Boomi's internal datetime pipeli
 <!-- Only generate mappings for leaf data fields: -->
 <Mapping fromKey="9" fromType="profile" toKey="..." toType="profile"/>  
 ```
+
+## Regenerating a Mappings Block Is Destructive
+
+Rewriting `<Mappings>` wholesale replaces every mapping. The platform stores exactly what is pushed — it does not compare against the prior version, warn on a reduced count, or discard mappings on its own. An omitted mapping is simply gone, and the map still executes, emitting its surviving mappings plus defaults with nothing to distinguish that from a mapping never authored.
+
+**Before overwriting an existing map's `<Mappings>`, pull the current version and compare mapping counts.** Fewer profile-sourced mappings than the version being replaced is a regression until proven otherwise.
+
+```bash
+bash <skill-path>/scripts/boomi-component-pull.sh --component-id <map-guid>
+grep -c "<Mapping " active-development/transform.map/<Map_Name>.xml
+```
+
+This matters most when the profile on one side cannot be rendered (see `edi_profile_component.md` § Every Segment Must Live Inside a Root Container): regeneration working from what the editor shows drops every mapping referencing that side.
 
 ## Mapping Patterns
 
@@ -270,6 +299,8 @@ When using `toTagListKey`, Boomi automatically populates qualifier elements in t
 
 **Auto-population fills an instance; it does not create one.** The mapped source element's existence is what opens the instance — presence, not value. A present-but-empty source therefore opens an instance, writes nothing into it, and the qualifier auto-populates alone: `<ODSREQUEST><USERDATA>0528</USERDATA></ODSREQUEST>`, no payload, no error, execution COMPLETE. An absent source element opens no instance and no qualifier is written. With no qualifier on the target, that same present-but-empty source emits no element at all — an instance with nothing written into it is dropped. The rule is about the map having no value to write, not about how the value went missing: a direct mapping of `""`, a String function whose result is empty, and a Simple Lookup miss are indistinguishable in the output.
 
+**A partially filled instance is still emitted.** If any mapped child has a value, the instance is written without its empty children. A `ChargeIndicator` lookup miss beside a present `Amount` emits `<AllowanceCharge><Amount>800</Amount></AllowanceCharge>`, silently missing a mandatory child. To drop such rows, filter them upstream.
+
 ### keyPath Pattern
 
 The `fromTagListKey` / `toTagListKey` attributes are the only runtime-critical attributes for instance routing. The `[@tagListKey='X']` selectors in `fromKeyPath` are cosmetic metadata for GUI readability — the engine ignores them. All three of these produce identical runtime results:
@@ -298,6 +329,35 @@ Order/Party[Party/Type='Buyer']/Name
 | `toTagListKey` | string | References target profile's `<TagList listKey>` |
 
 Both attributes can coexist on a single Mapping for instanced-to-instanced routing (e.g., EDI qualifiers to XML qualifiers). Each resolves independently against its own profile's tagLists — the `listKey` numbers do not need to match between source and target profiles.
+
+## Document Cache Joins
+
+Adds a Document Cache as a second map source. Source and cache can be any profile types, including different types from each other. Each join looks up cached documents through one cache index, once per occurrence of its `srcParentKey` element; for output behavior see `document_cache_component.md` § Map Lookup Constraints.
+
+```xml
+<Mappings>
+  <Mapping fromKey="3" fromType="profile" toKey="3" toType="profile"/>                      <!-- source profile key -->
+  <Mapping fromCacheJoinKey="1" fromKey="4" fromType="profile" toKey="4" toType="profile"/> <!-- cache profile key -->
+</Mappings>
+<Functions/>
+<Defaults/>
+<DocumentCacheJoins>
+  <DocumentCacheJoin cacheIndex="1" docCache="{DOC_CACHE_COMPONENT_ID}" docCacheJoinId="1">
+    <srcParentKey key="2" tagListKey="0"/>        <!-- lookup scope: the source element that directly contains srcLinkKey -->
+    <CacheKeyJoinValues>
+      <CacheKeyJoinValue cacheKeyId="1" cacheKeyName="id (Root/Object/id)"> <!-- cacheKeyName is display-only -->
+        <srcLinkKey key="4" tagListKey="0"/>      <!-- source element whose value is matched against the cache key -->
+      </CacheKeyJoinValue>
+    </CacheKeyJoinValues>
+  </DocumentCacheJoin>
+</DocumentCacheJoins>
+```
+
+- **A non-zero `fromCacheJoinKey` switches `fromKey` to the cache profile's element keys.** `0` or absent means the map's `fromProfile`. The same key number reads a different field in each namespace.
+- `fromCacheJoinKey` must equal a `docCacheJoinId` in the same map — any integer works as the label. A dangling reference passes push and deploy, then fails the execution with a bare `NullPointerException` (Issue #47 in `references/guides/boomi_error_reference.md`).
+- `cacheIndex` is the cache's `CacheIndex/@indexId`; every `cacheKey/@id` in that index needs a `CacheKeyJoinValue` with a matching `cacheKeyId`.
+- **Set `srcParentKey` to the element that directly contains `srcLinkKey`.** JSON: the `Object` inside the array's `ArrayElement` (the `ArrayElement` also works). XML: the repeating element. Flat file: `Elements`, not `Record`.
+- A broader scope — the root, an array or list container, a flat file `Record`, or `key="0"` — pairs every matched cached document with every source record, including records whose key matches nothing. Push, deploy and execution all succeed, and a single-record source gives the correct result, so test with at least two records whose keys match different cached documents (Issue #48 in `references/guides/boomi_error_reference.md`).
 
 ## Observed Patterns
 
@@ -364,6 +424,8 @@ Functions come in two types:
 
 - **Standard functions** — single-step built-in operations spanning these categories: Connector, Custom Scripting, Date, Language, Lookup, Numeric, Properties, and String.
 - **User-Defined functions** — reusable, standalone components (`type="transform.function"`) that chain multiple standard function steps together in a defined sequence.
+
+There is no if/then, comparison, or boolean function, but conditional logic does not require Scripting — see "Expressing a Conditional" in references/components/map_component_functions.md.
 
 See references/components/map_component_functions.md for comprehensive function documentation, and references/components/user_defined_function_component.md for authoring User-Defined Function components.
 
